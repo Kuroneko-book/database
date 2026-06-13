@@ -39,7 +39,7 @@ docker-compose exec dev bash
 第1章を実行する場合
 
 ```Bash
-docker-compose exec dev ./gradlew :chapter01:run --console=plain
+docker-compose exec dev gradle :chapter01:run --console=plain
 ```
 
 ポイント: --console=plain を付与することで、対話型プログラム（REPL）の入力プロンプトが崩れず、綺麗に表示・入力できるようになります。
