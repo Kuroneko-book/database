@@ -40,4 +40,8 @@ subprojects {
     tasks.named('test') {
         useJUnitPlatform()
     }
+
+    tasks.withType(JavaExec).configureEach {
+        standardInput = System.in
+    }
 }
