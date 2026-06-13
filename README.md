@@ -14,21 +14,21 @@
 プロジェクトのルートディレクトリで以下のコマンドを実行します。初回はコンテナの構築が行われます。
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 コンテナの停止
 開発を終了する場合は、以下のコマンドでコンテナを停止します。
 
 ```Bash
-docker-compose down
+docker compose down
 ```
 
 コンテナの中に入る（シェルを起動する）
 コンテナの中で直接色々なコマンド（gradleなど）を実行したい場合は、以下のコマンドでコンテナ内のシェルに入ることができます。
 
 ```Bash
-docker-compose exec dev bash
+docker compose exec dev bash
 ```
 
 (※以降のコマンドは、コンテナの外から実行する想定のコマンドを記載しています)
@@ -39,7 +39,7 @@ docker-compose exec dev bash
 第1章を実行する場合
 
 ```Bash
-docker-compose exec dev gradle :chapter01:run --console=plain
+docker compose exec dev gradle :chapter01:run --console=plain
 ```
 
 ポイント: --console=plain を付与することで、対話型プログラム（REPL）の入力プロンプトが崩れず、綺麗に表示・入力できるようになります。
@@ -53,13 +53,13 @@ settings.gradle に章を追加した後は、同様に章のフォルダ名を�
 すべての章のテストをまとめて実行する
 
 ```Bash
-docker-compose exec dev gradle test
+docker compose exec dev gradle test
 ```
 
 特定の章（例: 第1章）のテストだけを実行する
 
 ```Bash
-docker-compose exec dev gradle :chapter01:test
+docker compose exec dev gradle :chapter01:test
 ```
 
 テスト結果のレポートは、各章の build/reports/tests/test/index.html に自動生成されます。
@@ -71,7 +71,7 @@ docker-compose exec dev gradle :chapter01:test
 コードを自動整形する
 
 ```Bash
-docker-compose exec dev gradle spotlessApply
+docker compose exec dev gradle spotlessApply
 ```
 
 このコマンドを実行すると、すべてのJavaファイルのインデントや改行が正しいルールに自動で修正されます。
@@ -79,7 +79,7 @@ docker-compose exec dev gradle spotlessApply
 フォーマットが守られているかチェックだけする
 
 ```Bash
-docker-compose exec dev gradle spotlessCheck
+docker compose exec dev gradle spotlessCheck
 ```
 
 ※GitHub上のCI（自動ビルド）でもこのチェックが走るようになっており、フォーマットが崩れている場合はエラーになります。
