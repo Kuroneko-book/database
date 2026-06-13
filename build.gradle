@@ -22,7 +22,7 @@ subprojects {
 
     // 各章のメインクラスを「フォルダ名」から自動的に決定する（個別の設定は不要）
     application {
-        mainClass = "com.example.db.${project.name}.Main"
+        mainClass = "customdb.${project.name}.Main"
     }
 
     // コードフォーマッタ（Google Java Format）の設定
