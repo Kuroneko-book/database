@@ -12,6 +12,7 @@
 ### コンテナの起動
 
 プロジェクトのルートディレクトリで以下のコマンドを実行します。初回はコンテナの構築が行われます。
+※本READMEでは Docker Compose v2（`docker compose`）を使用します。`docker-compose`（v1）を利用している場合は Compose プラグインをインストールしてください。
 
 ```bash
 docker compose up -d
