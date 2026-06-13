@@ -1,0 +1,6 @@
+rootProject.name = 'repository'
+
+include 'chapter01'
+// 今後章が完成するごとに以下を追加していく
+// include 'chapter02'
+// include 'chapter03'
