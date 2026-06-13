@@ -105,6 +105,3 @@ docker-compose exec dev gradle spotlessCheck
 
 第10章 設計の整理
 
-```
-
-```
