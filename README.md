@@ -86,6 +86,7 @@ docker compose exec dev gradle spotlessCheck
 ※GitHub上のCI（自動ビルド）でもこのチェックが走るようになっており、フォーマットが崩れている場合はエラーになります。
 
 📂 目次と対応コード
+
 第1章 最小のデータベース
 
 第2章 データの永続化
@@ -105,4 +106,3 @@ docker compose exec dev gradle spotlessCheck
 第9章 パフォーマンスの改善
 
 第10章 設計の整理
-
