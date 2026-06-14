@@ -1,7 +1,6 @@
 # 実行する章のデフォルト値（コマンドラインから上書き可能）
 CHAP ?= chapter01
 
-
 # 開発環境の起動
 up:
 	docker compose up -d
