@@ -28,7 +28,7 @@ public class nekoDB {
    * @param value レコードの値（文字列）
    */
   public void insert(String key, String value) {
-    
+
     // 文字列をIntegerに変換
     int id = Integer.parseInt(key);
     if (db.containsKey(id)) {
