@@ -5,8 +5,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
 
-/** kuronekoDB クラス シンプルなメモリ内データベースの実装 キー・バリューペアでデータを管理し、基本的なCRUD操作を提供する */
-public class kuronekoDB {
+/** nekoDB クラス シンプルなメモリ内データベースの実装 キー・バリューペアでデータを管理し、基本的なCRUD操作を提供する */
+public class nekoDB {
   // データベース本体（キーはID、値は文字列）
   private Map<Integer, String> db;
   // ユーザー入力を受け取るためのスキャナー
@@ -15,10 +15,10 @@ public class kuronekoDB {
   private SimpleParser parser;
 
   /** コンストラクタ HashMapとScannerを初期化する DB開始メッセージを表示する */
-  public kuronekoDB() {
+  public nekoDB() {
     db = new HashMap<>();
     scanner = new Scanner(System.in);
-    System.out.println("Welcome to kuronekoDB!");
+    System.out.println("Welcome to nekoDB!");
   }
 
   /**
@@ -28,19 +28,14 @@ public class kuronekoDB {
    * @param value レコードの値（文字列）
    */
   public void insert(String key, String value) {
-    try {
-      // 文字列をIntegerに変換
-      int id = Integer.parseInt(key);
-      if (db.containsKey(id)) {
-        System.out.println("Key already exists. Use update command to modify.");
-        return;
-      } else {
-        db.put(id, value);
-      }
-    } catch (NumberFormatException e) {
-      // 無効なキー形式の場合はエラーメッセージを表示
-      System.out.println("Invalid key format. Please enter a valid integer ID.");
+    
+    // 文字列をIntegerに変換
+    int id = Integer.parseInt(key);
+    if (db.containsKey(id)) {
+      System.out.println("Key already exists. Use update command to modify.");
       return;
+    } else {
+      db.put(id, value);
     }
   }
 
@@ -55,17 +50,12 @@ public class kuronekoDB {
    * @param key 検索するレコードのID（数字）
    */
   public void select(String key) {
-    try {
-      // 文字列をIntegerに変換
-      int id = Integer.parseInt(key);
-      if (!db.containsKey(id)) {
-        System.out.println("Record not found.");
-      } else {
-        System.out.println(db.get(id));
-      }
-    } catch (NumberFormatException e) {
-      // 無効なキー形式の場合はエラーメッセージを表示
-      System.out.println("Invalid key format. Please enter a valid integer ID.");
+    // 文字列をIntegerに変換
+    int id = Integer.parseInt(key);
+    if (!db.containsKey(id)) {
+      System.out.println("Record not found.");
+    } else {
+      System.out.println(db.get(id));
     }
   }
 

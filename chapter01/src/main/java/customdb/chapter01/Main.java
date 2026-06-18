@@ -1,8 +1,8 @@
 package customdb.chapter01;
 
-import customdb.chapter01.DB.kuronekoDB;
+import customdb.chapter01.DB.nekoDB;
 
-/** Main クラス kuronekoDB データベースアプリケーションのエントリーポイント */
+/** Main クラス nekoDB データベースアプリケーションのエントリーポイント */
 public class Main {
   /**
    * メインメソッド データベースのインスタンスを作成し、ユーザーとのインタラクティブなセッションを開始する
@@ -11,7 +11,7 @@ public class Main {
    */
   public static void main(String[] args) {
     // kuronekoDB インスタンスを作成
-    kuronekoDB db = new kuronekoDB();
+    nekoDB db = new nekoDB();
     // データベースのインタラクティブセッションを開始
     db.start();
   }
