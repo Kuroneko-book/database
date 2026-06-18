@@ -56,7 +56,7 @@ public class nekoDB {
           db.entrySet().stream().map(entry -> entry.getKey() + "," + entry.getValue()).toList();
       Files.write(dataPath, lines);
     } catch (IOException e) {
-      throw new IllegalStateException("Failed to save database to ");
+      throw new IllegalStateException("Failed to save database.");
     }
   }
 
