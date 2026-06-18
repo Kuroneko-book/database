@@ -1,7 +1,7 @@
 package customdb.chapter01.Parser;
 
 /** SimpleParser クラス SQLコマンド文字列を解析してトークンに分割し、 最初のトークンをコマンドとして抽出する機能を提供する */
-public final class SimpleParser {
+public class SimpleParser {
 
   /** コンストラクタ 将来的に拡張可能な設計になっている */
   public SimpleParser() {
