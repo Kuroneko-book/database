@@ -62,14 +62,21 @@ public class nekoDB {
   }
 
   public void insert(String key, String value) {
-    int id = Integer.parseInt(key);
-    if (db.containsKey(id)) {
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
+    if (db.putIfAbsent(id, value) != null) {
       System.out.println("Key already exists. Use update command to modify.");
       return;
-    } else {
-      db.put(id, value);
-      saveToFile();
     }
+
+    saveToFile();
+    System.out.println("Inserted and saved to disk.");
   }
 
   public void select() {
