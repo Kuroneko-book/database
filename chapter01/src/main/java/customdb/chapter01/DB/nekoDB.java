@@ -18,6 +18,7 @@ public class nekoDB {
   public nekoDB() {
     db = new HashMap<>();
     scanner = new Scanner(System.in);
+    parser = new SimpleParser();
     System.out.println("Welcome to nekoDB!");
   }
 
@@ -28,15 +29,20 @@ public class nekoDB {
    * @param value レコードの値（文字列）
    */
   public void insert(String key, String value) {
-
-    // 文字列をIntegerに変換
-    int id = Integer.parseInt(key);
-    if (db.containsKey(id)) {
-      System.out.println("Key already exists. Use update command to modify.");
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
       return;
-    } else {
-      db.put(id, value);
     }
+
+    if (db.putIfAbsent(id, value) != null) {
+      System.out.println("Key already exists.");
+      return;
+    }
+
+    System.out.println("Inserted.");
   }
 
   /** データベース内のすべてのレコードを表示する */
@@ -73,7 +79,6 @@ public class nekoDB {
         break;
       }
 
-      parser = new SimpleParser();
       String[] tokens = parser.parse(scanner.nextLine());
       String command = parser.getCommand(tokens);
 
