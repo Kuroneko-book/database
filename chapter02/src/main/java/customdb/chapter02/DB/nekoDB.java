@@ -21,16 +21,21 @@ public class nekoDB {
     scanner = new Scanner(System.in);
     parser = new SimpleParser();
     dataPath = Path.of(DATA_PATH);
-    loadFromFile();
+
+    if (!Files.exists(dataPath.getParent())) {
+      try {
+        Files.createDirectories(dataPath.getParent());
+      } catch (IOException e) {
+        System.out.println("Failed to create data directory.");
+      }
+    } else {
+      loadFromFile();
+    }
     System.out.println("Welcome to nekoDB!");
   }
 
   /** ファイルから key,value 形式のテキストを読み込んでレコードを復元する */
   private void loadFromFile() {
-    if (!Files.exists(dataPath)) {
-      return;
-    }
-
     try {
       List<String> lines = Files.readAllLines(dataPath);
       for (String line : lines) {
@@ -49,11 +54,6 @@ public class nekoDB {
   /** すべてのレコードを key,value 形式のテキストでファイルに保存する */
   private void saveToFile() {
     try {
-      Path path = dataPath.getParent();
-      if (path != null) {
-        Files.createDirectories(path);
-      }
-
       List<String> lines =
           db.entrySet().stream().map(entry -> entry.getKey() + "," + entry.getValue()).toList();
       Files.write(dataPath, lines);
