@@ -100,6 +100,44 @@ public class nekoDB {
     }
   }
 
+  public void update(String key, String value) {
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
+    if (!db.containsKey(id)) {
+      System.out.println("Record not found.");
+      return;
+    }
+
+    db.put(id, value);
+    saveToFile();
+    System.out.println("Updated and saved to disk.");
+  }
+
+  public void delete(String key) {
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
+    if (!db.containsKey(id)) {
+      System.out.println("Record not found.");
+      return;
+    }
+
+    db.remove(id);
+    saveToFile();
+    System.out.println("Deleted and saved to disk.");
+  }
+
   public void start() {
     while (true) {
       System.out.print("db > ");
@@ -118,6 +156,10 @@ public class nekoDB {
       } else if (command.equals("select")) {
         if (tokens.length == 1) select();
         else if (tokens.length == 2) select(tokens[1]);
+      } else if (command.equals("update") && tokens.length == 3) {
+        update(tokens[1], tokens[2]);
+      } else if (command.equals("delete") && tokens.length == 2) {
+        delete(tokens[1]);
       } else if (command.equals("exit")) {
         System.out.println("Bye!");
         break;
