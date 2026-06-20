@@ -19,6 +19,7 @@ public class nekoDB {
   public nekoDB() {
     db = new HashMap<>();
     scanner = new Scanner(System.in);
+    parser = new SimpleParser();
     dataPath = Path.of(DATA_PATH);
     loadFromFile();
     System.out.println("Welcome to nekoDB!");
@@ -100,7 +101,6 @@ public class nekoDB {
         break;
       }
 
-      parser = new SimpleParser();
       String[] tokens = parser.parse(scanner.nextLine());
       String command = parser.getCommand(tokens);
 
