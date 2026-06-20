@@ -65,6 +65,51 @@ public class nekoDB {
     }
   }
 
+  /** データベース内のレコードを更新する
+   * 
+   * @param key 更新するレコードのID（数字）
+   * @param value 新しい値（文字列）
+  */
+  public void update(String key, String value) {
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
+    if (!db.containsKey(id)) {
+      System.out.println("Record not found.");
+      return;
+    }
+
+    db.put(id, value);
+    System.out.println("Updated.");
+  }
+
+  /** データベース内のレコードを削除する
+   * 
+   * @param key 削除するレコードのID（数字）
+  */
+  public void delete(String key) {
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
+    if (!db.containsKey(id)) {
+      System.out.println("Record not found.");
+      return;
+    }
+
+    db.remove(id);
+    System.out.println("Deleted.");
+  }
+
   /**
    * データベースのメインループを開始する ユーザー入力を受け取り、コマンドを解析して対応する操作を実行する サポートコマンド： - insert <key> <value>: 新規レコードを挿入
    * - select: すべてのレコードを表示 - select <key>: 指定されたキーのレコードを表示 - exit: プログラムを終了
@@ -90,6 +135,10 @@ public class nekoDB {
       } else if (command.equals("select")) {
         if (tokens.length == 1) select();
         else if (tokens.length == 2) select(tokens[1]);
+      } else if (command.equals("update") && tokens.length == 3) {
+        update(tokens[1], tokens[2]);
+      } else if (command.equals("delete") && tokens.length == 2) {
+        delete(tokens[1]);
       } else if (command.equals("exit")) {
         System.out.println("Bye!");
         break;
