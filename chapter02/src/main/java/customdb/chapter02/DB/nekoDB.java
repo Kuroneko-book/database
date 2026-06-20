@@ -42,6 +42,7 @@ public class nekoDB {
     } catch (IOException e) {
       System.out.println("Failed to load database.");
     }
+    System.out.println("Loaded records from file.");
   }
 
   /** すべてのレコードを key,value 形式のテキストでファイルに保存する */
