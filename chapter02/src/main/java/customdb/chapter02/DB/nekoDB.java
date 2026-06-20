@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
-/** nekoDB クラス シンプルなメモリ内データベースの実装 キー・バリューペアでデータを管理し、基本的なCRUD操作を提供する */
 public class nekoDB {
   private static final String DATA_PATH = "data/chapter02.db";
   private Map<Integer, String> db;
@@ -25,6 +24,7 @@ public class nekoDB {
     System.out.println("Welcome to nekoDB!");
   }
 
+  /** ファイルから key,value 形式のテキストを読み込んでレコードを復元する */
   private void loadFromFile() {
     if (!Files.exists(dataPath)) {
       return;
@@ -60,12 +60,6 @@ public class nekoDB {
     }
   }
 
-  /**
-   * 新しいレコードをデータベースに挿入する
-   *
-   * @param key レコードのID（数字）
-   * @param value レコードの値（文字列）
-   */
   public void insert(String key, String value) {
     int id = Integer.parseInt(key);
     if (db.containsKey(id)) {
@@ -77,16 +71,10 @@ public class nekoDB {
     }
   }
 
-  /** データベース内のすべてのレコードを表示する */
   public void select() {
     db.forEach((id, name) -> System.out.println("(" + id + "," + name + ")"));
   }
 
-  /**
-   * 指定されたキーに対応するレコードを検索して表示する
-   *
-   * @param key 検索するレコードのID（数字）
-   */
   public void select(String key) {
     int id = Integer.parseInt(key);
     if (!db.containsKey(id)) {
