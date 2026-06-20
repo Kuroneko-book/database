@@ -85,7 +85,14 @@ public class nekoDB {
   }
 
   public void select(String key) {
-    int id = Integer.parseInt(key);
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
     if (!db.containsKey(id)) {
       System.out.println("Record not found.");
     } else {

@@ -56,8 +56,14 @@ public class nekoDB {
    * @param key 検索するレコードのID（数字）
    */
   public void select(String key) {
-    // 文字列をIntegerに変換
-    int id = Integer.parseInt(key);
+    int id;
+    try {
+      id = Integer.parseInt(key);
+    } catch (NumberFormatException e) {
+      System.out.println("Error: Key must be an integer.");
+      return;
+    }
+
     if (!db.containsKey(id)) {
       System.out.println("Record not found.");
     } else {
