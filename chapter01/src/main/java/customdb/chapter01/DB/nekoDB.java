@@ -71,11 +71,12 @@ public class nekoDB {
     }
   }
 
-  /** データベース内のレコードを更新する
-   * 
+  /**
+   * データベース内のレコードを更新する
+   *
    * @param key 更新するレコードのID（数字）
    * @param value 新しい値（文字列）
-  */
+   */
   public void update(String key, String value) {
     int id;
     try {
@@ -94,10 +95,11 @@ public class nekoDB {
     System.out.println("Updated.");
   }
 
-  /** データベース内のレコードを削除する
-   * 
+  /**
+   * データベース内のレコードを削除する
+   *
    * @param key 削除するレコードのID（数字）
-  */
+   */
   public void delete(String key) {
     int id;
     try {
