@@ -36,18 +36,26 @@ public class nekoDB {
 
   /** ファイルから key,value 形式のテキストを読み込んでレコードを復元する */
   private void loadFromFile() {
+    List<String> lines;
     try {
-      List<String> lines = Files.readAllLines(dataPath);
-      for (String line : lines) {
-        if (line.isBlank()) {
-          continue;
-        }
-        String[] parts = line.split(",");
-        db.put(Integer.parseInt(parts[0]), parts[1]);
-      }
+      lines = Files.readAllLines(dataPath);
     } catch (IOException e) {
       System.out.println("Failed to load database.");
+      return;
     }
+
+    for (String line : lines) {
+      if (line.isBlank()) {
+        continue;
+      }
+      try {
+        String[] parts = line.split(",");
+        db.put(Integer.parseInt(parts[0]), parts[1]);
+      } catch (ArrayIndexOutOfBoundsException e) {
+        System.out.println("Skipped invalid record format: " + line);
+      }
+    }
+
     System.out.println("Loaded records from file.");
   }
 
