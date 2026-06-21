@@ -1,33 +1,75 @@
-package customdb.chapter01.DB;
+package customdb.chapter02.DB;
 
-import customdb.chapter01.Parser.SimpleParser;
+import customdb.chapter02.Parser.SimpleParser;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
-/** nekoDB クラス シンプルなメモリ内データベースの実装 キー・バリューペアでデータを管理し、基本的なCRUD操作を提供する */
 public class nekoDB {
-  // データベース本体（キーはID、値は文字列）
+  private static final String DATA_PATH = "data/chapter02.db";
   private Map<Integer, String> db;
-  // ユーザー入力を受け取るためのスキャナー
   private Scanner scanner;
-  // SQL解析用の簡易パーサー
   private SimpleParser parser;
+  private Path dataPath;
 
-  /** コンストラクタ HashMapとScannerを初期化する DB開始メッセージを表示する */
   public nekoDB() {
     db = new HashMap<>();
     scanner = new Scanner(System.in);
     parser = new SimpleParser();
+    dataPath = Path.of(DATA_PATH);
+
+    if (!Files.exists(dataPath.getParent())) {
+      try {
+        Files.createDirectories(dataPath.getParent());
+      } catch (IOException e) {
+        System.out.println("Failed to create data directory.");
+      }
+    } else {
+      loadFromFile();
+    }
     System.out.println("Welcome to nekoDB!");
   }
 
-  /**
-   * 新しいレコードをデータベースに挿入する 同じキーが存在する場合はエラーメッセージを表示 キーが数値でない場合は例外を処理してエラーメッセージを表示
-   *
-   * @param key レコードのID（数字）
-   * @param value レコードの値（文字列）
-   */
+  /** ファイルから key,value 形式のテキストを読み込んでレコードを復元する */
+  private void loadFromFile() {
+    List<String> lines;
+    try {
+      lines = Files.readAllLines(dataPath);
+    } catch (IOException e) {
+      System.out.println("Failed to load database.");
+      return;
+    }
+
+    for (String line : lines) {
+      if (line.isBlank()) {
+        continue;
+      }
+      try {
+        String[] parts = line.split(",");
+        db.put(Integer.parseInt(parts[0]), parts[1]);
+      } catch (ArrayIndexOutOfBoundsException e) {
+        System.out.println("Skipped invalid record format: " + line);
+      }
+    }
+
+    System.out.println("Loaded records from file.");
+  }
+
+  /** すべてのレコードを key,value 形式のテキストでファイルに保存する */
+  private void saveToFile() {
+    try {
+      List<String> lines =
+          db.entrySet().stream().map(entry -> entry.getKey() + "," + entry.getValue()).toList();
+      Files.write(dataPath, lines);
+    } catch (IOException e) {
+      System.out.println("Failed to save database.");
+    }
+  }
+
   public void insert(String key, String value) {
     int id;
     try {
@@ -38,23 +80,18 @@ public class nekoDB {
     }
 
     if (db.putIfAbsent(id, value) != null) {
-      System.out.println("Key already exists.");
+      System.out.println("Key already exists. Use update command to modify.");
       return;
     }
 
-    System.out.println("Inserted.");
+    saveToFile();
+    System.out.println("Inserted and saved to disk.");
   }
 
-  /** データベース内のすべてのレコードを表示する */
   public void select() {
     db.forEach((id, name) -> System.out.println("(" + id + "," + name + ")"));
   }
 
-  /**
-   * 指定されたキーに対応するレコードを検索して表示する キーが存在しない場合はメッセージを表示 キーが数値でない場合は例外を処理してエラーメッセージを表示
-   *
-   * @param key 検索するレコードのID（数字）
-   */
   public void select(String key) {
     int id;
     try {
@@ -71,12 +108,6 @@ public class nekoDB {
     }
   }
 
-  /**
-   * データベース内のレコードを更新する
-   *
-   * @param key 更新するレコードのID（数字）
-   * @param value 新しい値（文字列）
-   */
   public void update(String key, String value) {
     int id;
     try {
@@ -92,14 +123,10 @@ public class nekoDB {
     }
 
     db.put(id, value);
-    System.out.println("Updated.");
+    saveToFile();
+    System.out.println("Updated and saved to disk.");
   }
 
-  /**
-   * データベース内のレコードを削除する
-   *
-   * @param key 削除するレコードのID（数字）
-   */
   public void delete(String key) {
     int id;
     try {
@@ -115,15 +142,10 @@ public class nekoDB {
     }
 
     db.remove(id);
-    System.out.println("Deleted.");
+    saveToFile();
+    System.out.println("Deleted and saved to disk.");
   }
 
-  /**
-   * データベースのメインループを開始する ユーザー入力を受け取り、コマンドを解析して対応する操作を実行する サポートコマンド： - insert <key> <value>: 新規レコードを挿入
-   * - select: すべてのレコードを表示 - select <key>: 指定されたキーのレコードを表示 - exit: プログラムを終了
-   *
-   * <p>無効なコマンドや不正なパラメータ数の場合は、エラーメッセージを表示する
-   */
   public void start() {
     while (true) {
       System.out.print("db > ");
@@ -135,7 +157,6 @@ public class nekoDB {
       String[] tokens = parser.parse(scanner.nextLine());
       String command = parser.getCommand(tokens);
 
-      // コマンドが空の場合はスキップ
       if (command.isEmpty()) {
         continue;
       } else if (command.equals("insert") && tokens.length == 3) {

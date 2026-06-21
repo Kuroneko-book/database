@@ -1,4 +1,5 @@
 rootProject.name = 'database'
 
 include 'chapter01'
+include 'chapter02'
 // 新しい章ができたらここに加えていく
