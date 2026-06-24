@@ -31,4 +31,8 @@ fmt:
 check:
 	docker compose exec dev gradle spotlessCheck
 
-.PHONY: up down build shell run fmt check
+# 10000件のテストデータを一括投入する (例: make insert または make insert CHAP=chapter03)
+insert:
+	./insert_data.sh $(CHAP)
+
+.PHONY: up down build shell run fmt check insert
