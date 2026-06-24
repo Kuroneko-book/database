@@ -5,9 +5,9 @@ CHAP=${1:-chapter01}
 
 echo "1000件のデータを生成中..."
 
-# 1000回分の insert コマンドを一時ファイルに書き出す
+# 10000回分の insert コマンドを一時ファイルに書き出す
 # （例: insert 1 user1）
-for i in $(seq 1 3000)
+for i in $(seq 1 10000)
 do
     echo "insert $i user$i"
 done > data.txt
