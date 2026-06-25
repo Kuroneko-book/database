@@ -2,186 +2,328 @@ package customdb.chapter03.DB;
 
 import customdb.chapter03.Parser.SimpleParser;
 import java.io.IOException;
+import java.io.RandomAccessFile;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 import java.util.Scanner;
 
 public class nekoDB {
-  private static final String DATA_PATH = "data/chapter03.db";
-  private Map<Integer, String> db;
-  private Scanner scanner;
-  private SimpleParser parser;
-  private Path dataPath;
+    private static final String DATA_PATH = "data/chapter03.db";
 
-  public nekoDB() {
-    db = new HashMap<>();
-    scanner = new Scanner(System.in);
-    parser = new SimpleParser();
-    dataPath = Path.of(DATA_PATH);
+    // ページサイズとスロットの定数
+    private static final int PAGE_SIZE = 4096; // 4KB
+    private static final int SLOT_SIZE = 64;
+    private static final int MAX_SLOTS = PAGE_SIZE / SLOT_SIZE; // 64
 
-    if (!Files.exists(dataPath.getParent())) {
-      try {
-        Files.createDirectories(dataPath.getParent());
-      } catch (IOException e) {
-        System.out.println("Failed to create data directory.");
-      }
-    } else {
-      loadFromFile();
-    }
-    System.out.println("Welcome to nekoDB!");
-  }
+    private Scanner scanner;
+    private SimpleParser parser;
+    private Path dataPath;
 
-  private void loadFromFile() {
-    List<String> lines;
-    try {
-      lines = Files.readAllLines(dataPath);
-    } catch (IOException e) {
-      System.out.println("Failed to load database.");
-      return;
+    private RandomAccessFile file;
+
+    public nekoDB() {
+        scanner = new Scanner(System.in);
+        parser = new SimpleParser();
+        dataPath = Path.of(DATA_PATH);
+
+        try {
+            if (dataPath.getParent() != null && !Files.exists(dataPath.getParent())) {
+                Files.createDirectories(dataPath.getParent());
+            }
+            // 読み書きモードでファイルを開く
+            this.file = new RandomAccessFile(dataPath.toFile(), "rw");
+        } catch (IOException e) {
+            System.out.println("Failed to initialize database: " + e.getMessage());
+        }
+        System.out.println("Welcome to nekoDB!");
     }
 
-    for (String line : lines) {
-      if (line.isBlank()) {
-        continue;
-      }
-      try {
-        String[] parts = line.split(",");
-        db.put(Integer.parseInt(parts[0]), parts[1]);
-      } catch (ArrayIndexOutOfBoundsException e) {
-        System.out.println("Skipped invalid record format: " + line);
-      }
+    public void insert(String key, String value) {
+        int id;
+        try {
+            id = Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Key must be an integer.");
+            return;
+        }
+
+        try {
+            int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+
+            // 重複チェック（全ページ・全スロットをスキャン）
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
+
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    int offset = s * SLOT_SIZE;
+                    if (buf[offset] == 1) { // 1番目のバイトが1なら「使用中」
+                        ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+                        bb.get(); // 有効フラグをスキップ
+                        int recordKey = bb.getInt(); // キーを読み取る
+
+                        if (recordKey == id) {
+                            System.out.println("Key already exists. Use update command to modify.");
+                            return;
+                        }
+                    }
+                }
+            }
+
+            // 空きスロットを探す
+            int targetPage = -1;
+            int targetSlot = -1;
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
+
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    if (buf[s * SLOT_SIZE] == 0) { // 0なら「空き」
+                        targetPage = p;
+                        targetSlot = s;
+                        break;
+                    }
+                }
+                if (targetPage != -1)
+                    break;
+            }
+
+            // 空きがない場合は新しいページを用意
+            if (targetPage == -1) {
+                targetPage = numPages;
+                targetSlot = 0;
+            }
+
+            // 対象のページを読み込み、レコードをバイト配列に書き込む
+            byte[] buf = new byte[PAGE_SIZE];
+            if (targetPage < numPages) {
+                file.seek((long) targetPage * PAGE_SIZE);
+                file.read(buf);
+            }
+
+            int offset = targetSlot * SLOT_SIZE;
+            ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+            bb.put((byte) 1); // 有効フラグをセット
+            bb.putInt(id); // キーをセット
+
+            byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
+            int len = Math.min(valBytes.length, 55); // 最大55バイトに制限
+            bb.putInt(len);
+            bb.put(valBytes, 0, len);
+
+            // 対象ページだけをファイルに上書き保存
+            file.seek((long) targetPage * PAGE_SIZE);
+            file.write(buf);
+
+            System.out.println("Inserted and saved to disk.");
+        } catch (IOException e) {
+            System.out.println("Disk I/O Error during insert.");
+        }
     }
 
-    System.out.println("Loaded records from file.");
-  }
+    public void select() {
+        try {
+            int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
 
-  private void saveToFile() {
-    try {
-      List<String> lines =
-          db.entrySet().stream().map(entry -> entry.getKey() + "," + entry.getValue()).toList();
-      Files.write(dataPath, lines);
-    } catch (IOException e) {
-      System.out.println("Failed to save database.");
-    }
-  }
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
 
-  public void insert(String key, String value) {
-    int id;
-    try {
-      id = Integer.parseInt(key);
-    } catch (NumberFormatException e) {
-      System.out.println("Error: Key must be an integer.");
-      return;
-    }
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    int offset = s * SLOT_SIZE;
+                    if (buf[offset] == 1) { // 使用中スロットのみ読み取る
+                        ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+                        bb.get(); // フラグスキップ
 
-    if (db.putIfAbsent(id, value) != null) {
-      System.out.println("Key already exists. Use update command to modify.");
-      return;
-    }
-
-    saveToFile();
-    System.out.println("Inserted and saved to disk.");
-  }
-
-  public void select() {
-    db.forEach((id, name) -> System.out.println("(" + id + "," + name + ")"));
-  }
-
-  public void select(String key) {
-    int id;
-    try {
-      id = Integer.parseInt(key);
-    } catch (NumberFormatException e) {
-      System.out.println("Error: Key must be an integer.");
-      return;
+                        int key = bb.getInt();
+                        int valLen = bb.getInt();
+                        byte[] valBytes = new byte[valLen];
+                        bb.get(valBytes);
+                        String value = new String(valBytes, StandardCharsets.UTF_8);
+                        System.out.println("(" + key + "," + value + ")");
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Disk I/O Error during select.");
+        }
     }
 
-    if (!db.containsKey(id)) {
-      System.out.println("Record not found.");
-    } else {
-      System.out.println(db.get(id));
+    public void select(String key) {
+        int id;
+        try {
+            id = Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Key must be an integer.");
+            return;
+        }
+
+        try {
+            int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
+
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    int offset = s * SLOT_SIZE;
+                    if (buf[offset] == 1) {
+                        ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+                        bb.get(); // フラグスキップ
+                        int recordKey = bb.getInt();
+
+                        if (recordKey == id) {
+                            int valLen = bb.getInt();
+                            byte[] valBytes = new byte[valLen];
+                            bb.get(valBytes);
+                            String value = new String(valBytes, StandardCharsets.UTF_8);
+                            System.out.println(value);
+                            return;
+                        }
+                    }
+                }
+            }
+            System.out.println("Record not found.");
+        } catch (IOException e) {
+            System.out.println("Disk I/O Error during select.");
+        }
     }
-  }
 
-  public void update(String key, String value) {
-    int id;
-    try {
-      id = Integer.parseInt(key);
-    } catch (NumberFormatException e) {
-      System.out.println("Error: Key must be an integer.");
-      return;
+    public void update(String key, String value) {
+        int id;
+        try {
+            id = Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Key must be an integer.");
+            return;
+        }
+
+        try {
+            int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
+
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    int offset = s * SLOT_SIZE;
+                    if (buf[offset] == 1) {
+                        ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+                        bb.get(); // フラグスキップ
+                        int recordKey = bb.getInt();
+
+                        if (recordKey == id) {
+                            // 対象を見つけたら同じスロットに上書き
+                            byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
+                            int len = Math.min(valBytes.length, 55);
+
+                            bb.putInt(len);
+                            bb.put(valBytes, 0, len);
+
+                            // 対象ページだけを保存
+                            file.seek((long) p * PAGE_SIZE);
+                            file.write(buf);
+                            return;
+                        }
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("Disk I/O Error during update.");
+        }
     }
 
-    if (!db.containsKey(id)) {
-      System.out.println("Record not found.");
-      return;
+    public void delete(String key) {
+        int id;
+        try {
+            id = Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Key must be an integer.");
+            return;
+        }
+
+        try {
+            int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+
+            for (int p = 0; p < numPages; p++) {
+                byte[] buf = new byte[PAGE_SIZE];
+                file.seek((long) p * PAGE_SIZE);
+                file.read(buf);
+
+                for (int s = 0; s < MAX_SLOTS; s++) {
+                    int offset = s * SLOT_SIZE;
+                    if (buf[offset] == 1) {
+                        ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
+                        bb.get(); // フラグスキップ
+                        int recordKey = bb.getInt();
+
+                        if (recordKey == id) {
+                            // 対象を見つけたら、先頭フラグを0にして論理削除
+                            buf[offset] = 0;
+
+                            file.seek((long) p * PAGE_SIZE);
+                            file.write(buf);
+                            return;
+                        }
+                    }
+                }
+            }
+            System.out.println("Record not found.");
+        } catch (IOException e) {
+            System.out.println("Disk I/O Error during delete.");
+        }
     }
 
-    db.put(id, value);
-    saveToFile();
-    System.out.println("Updated and saved to disk.");
-  }
+    public void start() {
+        while (true) {
+            System.out.print("db > ");
+            System.out.flush();
+            if (!scanner.hasNextLine()) {
+                break;
+            }
 
-  public void delete(String key) {
-    int id;
-    try {
-      id = Integer.parseInt(key);
-    } catch (NumberFormatException e) {
-      System.out.println("Error: Key must be an integer.");
-      return;
+            String[] tokens = parser.parse(scanner.nextLine());
+            String command = parser.getCommand(tokens);
+
+            // --- 計測開始 ---
+            long startTime = System.nanoTime();
+
+            if (command.isEmpty()) {
+                continue;
+            } else if (command.equals("insert") && tokens.length == 3) {
+                insert(tokens[1], tokens[2]);
+            } else if (command.equals("select")) {
+                if (tokens.length == 1)
+                    select();
+                else if (tokens.length == 2)
+                    select(tokens[1]);
+            } else if (command.equals("update") && tokens.length == 3) {
+                update(tokens[1], tokens[2]);
+            } else if (command.equals("delete") && tokens.length == 2) {
+                delete(tokens[1]);
+            } else if (command.equals("exit")) {
+                try {
+                    if (file != null)
+                        file.close();
+                } catch (IOException ignored) {
+                }
+                System.out.println("Bye!");
+                break;
+            } else {
+                System.out.println("Unknown command");
+            }
+
+            // --- 計測終了 ---
+            long endTime = System.nanoTime();
+            double timeMs = (endTime - startTime) / 1_000_000.0;
+            System.out.printf("(Executed in %.3f ms)\n", timeMs);
+        }
     }
-
-    if (!db.containsKey(id)) {
-      System.out.println("Record not found.");
-      return;
-    }
-
-    db.remove(id);
-    saveToFile();
-    System.out.println("Deleted and saved to disk.");
-  }
-
-  public void start() {
-    while (true) {
-      System.out.print("db > ");
-      System.out.flush();
-      if (!scanner.hasNextLine()) {
-        break;
-      }
-
-      String[] tokens = parser.parse(scanner.nextLine());
-      String command = parser.getCommand(tokens);
-
-      // --- 計測開始 ---
-      long startTime = System.nanoTime();
-
-      if (command.isEmpty()) {
-        continue;
-      } else if (command.equals("insert") && tokens.length == 3) {
-        insert(tokens[1], tokens[2]);
-      } else if (command.equals("select")) {
-        if (tokens.length == 1) select();
-        else if (tokens.length == 2) select(tokens[1]);
-      } else if (command.equals("update") && tokens.length == 3) {
-        update(tokens[1], tokens[2]);
-      } else if (command.equals("delete") && tokens.length == 2) {
-        delete(tokens[1]);
-      } else if (command.equals("exit")) {
-        System.out.println("Bye!");
-        break;
-      } else {
-        System.out.println("Unknown command");
-      }
-
-      // --- 計測終了 ---
-      if (!command.equals("exit")) {
-        long endTime = System.nanoTime();
-        double timeMs = (endTime - startTime) / 1_000_000.0;
-        System.out.printf("Executed in %.3f ms\n", timeMs);
-      }
-    }
-  }
 }
