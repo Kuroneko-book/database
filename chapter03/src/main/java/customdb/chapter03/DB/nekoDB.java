@@ -229,6 +229,8 @@ public class nekoDB {
               // 対象ページだけを保存
               file.seek((long) p * PAGE_SIZE);
               file.write(buf);
+
+              System.out.println("Updated correctly");
               return;
             }
           }
@@ -269,6 +271,8 @@ public class nekoDB {
 
               file.seek((long) p * PAGE_SIZE);
               file.write(buf);
+
+              System.out.println("Deleted and saved to disk.");
               return;
             }
           }
