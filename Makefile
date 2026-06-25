@@ -25,11 +25,11 @@ run:
 
 # コードの自動整形
 fmt:
-	docker compose exec dev gradle spotlessApply
+	docker compose exec dev gradle spotlessApply --no-configuration-cache
 
 # フォーマットのチェック (CI用)
 check:
-	docker compose exec dev gradle spotlessCheck
+	docker compose exec dev gradle spotlessCheck --no-configuration-cache
 
 # 10000件のテストデータを一括投入する (例: make insert または make insert CHAP=chapter03)
 insert:
