@@ -36,6 +36,7 @@ public class nekoDB {
       this.file = new RandomAccessFile(dataPath.toFile(), "rw");
     } catch (IOException e) {
       System.out.println("Failed to initialize database: " + e.getMessage());
+      return;
     }
     System.out.println("Welcome to nekoDB!");
   }
