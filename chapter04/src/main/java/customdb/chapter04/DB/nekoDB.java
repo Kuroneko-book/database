@@ -61,11 +61,11 @@ public class nekoDB {
 
   /** B-tree ノード */
   static class BTreeNode {
-    int[] keys; // キー配列
-    RecordId[] values; // レコードポインタ配列
+    int[] keys; // キー配列(ユーザーID)
+    RecordId[] values; // レコードポインタ配列(ユーザー名)
     BTreeNode[] children; // 子ノードポインタ
-    int numKeys; // 現在のキー数
-    boolean isLeaf; // 葉ノード判定
+    int numKeys; // 現在のキー数(現在のノードに何個のキーが入っているか)
+    boolean isLeaf; // 葉ノード判定(葉かどうか)
 
     BTreeNode(int t, boolean isLeaf) {
       this.isLeaf = isLeaf;
