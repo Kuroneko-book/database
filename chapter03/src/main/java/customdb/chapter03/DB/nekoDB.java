@@ -53,7 +53,10 @@ public class nekoDB {
     try {
       int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
 
-      // 重複チェック（全ページ・全スロットをスキャン）
+      // 重複チェックをして、空きスロットを検索（全ページ・全スロットをスキャン）
+      int targetPage = -1;
+      int targetSlot = -1;
+
       for (int p = 0; p < numPages; p++) {
         byte[] buf = new byte[PAGE_SIZE];
         file.seek((long) p * PAGE_SIZE);
@@ -61,35 +64,18 @@ public class nekoDB {
 
         for (int s = 0; s < MAX_SLOTS; s++) {
           int offset = s * SLOT_SIZE;
-          if (buf[offset] == 1) { // 1番目のバイトが1なら「使用中」
+          if (buf[offset] == 1) { // 使用中スロット
             ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
-            bb.get(); // 有効フラグをスキップ
-            int recordKey = bb.getInt(); // キーを読み取る
-
-            if (recordKey == id) {
+            bb.get(); // 先頭の有効かどうかのフラグをスキップ
+            if (bb.getInt() == id) {
               System.out.println("Key already exists. Use update command to modify.");
               return;
             }
-          }
-        }
-      }
-
-      // 空きスロットを探す
-      int targetPage = -1;
-      int targetSlot = -1;
-      for (int p = 0; p < numPages; p++) {
-        byte[] buf = new byte[PAGE_SIZE];
-        file.seek((long) p * PAGE_SIZE);
-        file.read(buf);
-
-        for (int s = 0; s < MAX_SLOTS; s++) {
-          if (buf[s * SLOT_SIZE] == 0) { // 0なら「空き」
+          } else if (buf[offset] == 0 && targetPage == -1) { // 最初の空きスロットを記録
             targetPage = p;
             targetSlot = s;
-            break;
           }
         }
-        if (targetPage != -1) break;
       }
 
       // 空きがない場合は新しいページを用意
