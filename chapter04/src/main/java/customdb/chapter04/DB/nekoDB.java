@@ -512,7 +512,8 @@ public class nekoDB {
 
       int offset = rid.slot * SLOT_SIZE;
       ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
-      bb.position(5); // フラグ(1) + キー(4) をスキップ
+      bb.get();
+      bb.getInt();
 
       byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
       int len = Math.min(valBytes.length, 55);
