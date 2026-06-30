@@ -7,6 +7,8 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.Scanner;
 
 public class nekoDB {
@@ -22,6 +24,7 @@ public class nekoDB {
   private RandomAccessFile file;
 
   private BTree index;
+  private Queue<RecordId> freeList;
 
   public nekoDB() {
     scanner = new Scanner(System.in);
@@ -29,6 +32,7 @@ public class nekoDB {
     dataPath = Path.of(DATA_PATH);
 
     index = new BTree(10);
+    freeList = new LinkedList<>();
 
     try {
       if (dataPath.getParent() != null && !Files.exists(dataPath.getParent())) {
@@ -343,6 +347,8 @@ public class nekoDB {
           int recordKey = bb.getInt();
           index.insert(recordKey, new RecordId(p, s));
           count++;
+        } else {
+          freeList.offer(new RecordId(p, s));
         }
       }
     }
@@ -370,31 +376,19 @@ public class nekoDB {
       int targetPage = -1;
       int targetSlot = -1;
 
-      for (int p = 0; p < numPages; p++) {
-        byte[] buf = new byte[PAGE_SIZE];
-        file.seek((long) p * PAGE_SIZE);
-        file.read(buf);
-
-        // 空きスロットを探す（いずれフリーリストなどを入れて高速化しても良いかも？）
-        for (int s = 0; s < MAX_SLOTS; s++) {
-          int offset = s * SLOT_SIZE;
-          if (buf[offset] == 1) {
-            ByteBuffer bb = ByteBuffer.wrap(buf, offset, SLOT_SIZE);
-            bb.get();
-            if (bb.getInt() == id) {
-              System.out.println("Key already exists. Use update command to modify.");
-              return;
-            }
-          } else if (buf[offset] == 0 && targetPage == -1) {
-            targetPage = p;
-            targetSlot = s;
-          }
-        }
-      }
-
-      if (targetPage == -1) {
+      // 線形探索を削除し、freeリストから空きスロットを取得
+      if (!freeList.isEmpty()) {
+        RecordId freeId = freeList.poll();
+        targetPage = freeId.page;
+        targetSlot = freeId.slot;
+      } else {
+        // freeリストが空（既存ページに空きなし）の場合は新規ページ
         targetPage = numPages;
         targetSlot = 0;
+        // 新規ページの残りスロットをfreeリストに登録
+        for (int s = 1; s < MAX_SLOTS; s++) {
+          freeList.offer(new RecordId(targetPage, s));
+        }
       }
 
       byte[] buf = new byte[PAGE_SIZE];
@@ -558,6 +552,8 @@ public class nekoDB {
 
       // B-treeインデックスからも削除 (ノードのマージ処理等が発生)
       index.delete(id);
+      freeList.offer(rid); // 空きスロットとして登録
+
       System.out.println("Deleted and saved to disk.");
     } catch (IOException e) {
       System.out.println("Disk I/O Error during delete.");
