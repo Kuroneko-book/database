@@ -35,4 +35,8 @@ check:
 insert:
 	./insert_data.sh $(CHAP)
 
-.PHONY: up down build shell run fmt check insert
+# テスト用データベースを作成して簡易クエリを実行する
+insert_ch05:
+	./insert_data_ch05.sh
+
+.PHONY: up down build shell run fmt check insert insert_ch05 testdb_ch05
