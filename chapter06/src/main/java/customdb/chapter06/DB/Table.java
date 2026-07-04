@@ -205,7 +205,7 @@ public class Table {
     Index idx = indexes.get(column);
 
     if (idx == null) {
-        throw new IllegalStateException("No index found for column: " + column);
+      throw new IllegalStateException("No index found for column: " + column);
     }
 
     return idx.search(value);

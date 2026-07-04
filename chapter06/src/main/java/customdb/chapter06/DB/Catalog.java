@@ -127,7 +127,14 @@ public class Catalog {
     List<String> columnTexts = new ArrayList<>();
 
     for (Schema.Column column : schema.getColumns()) {
-      String columnText = column.name() + ":" + column.type().name() + ":" + column.length() + ":" + (column.isIndexed() ? "1" : "0");
+      String columnText =
+          column.name()
+              + ":"
+              + column.type().name()
+              + ":"
+              + column.length()
+              + ":"
+              + (column.isIndexed() ? "1" : "0");
 
       columnTexts.add(columnText);
     }
