@@ -1,3 +1,9 @@
+package customdb.chapter06.Plan;
+
+import customdb.chapter06.Executor.ExecutionContext;
+import customdb.chapter06.Parser.Statement;
+import customdb.chapter06.Parser.Statement.Condition;
+import java.io.IOException;
 
 // インデックス検索を行う実行計画
 public class IndexScanPlan implements Plan {
@@ -17,5 +23,11 @@ public class IndexScanPlan implements Plan {
 
     public Condition getCondition() {
         return condition;
+    }
+
+    @Override
+    public void execute(ExecutionContext context, Statement.Select statement) throws IOException {
+        System.out.println("IndexScan : " + getTableName());
+        context.executeIndexScan(statement);
     }
 }
