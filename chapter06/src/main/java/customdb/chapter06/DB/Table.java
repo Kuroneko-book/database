@@ -8,13 +8,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Table {
   private static final int PAGE_SIZE = 4096; // ページサイズを4KBに設定
 
   private final Schema schema;
   private final RandomAccessFile file;
+  private final Map<String, Index> indexes = new HashMap<>();
 
   public Table(Schema schema, Path path) throws IOException {
     this.schema = schema;
@@ -22,6 +25,8 @@ public class Table {
       Files.createDirectories(path.getParent());
     }
     this.file = new RandomAccessFile(path.toFile(), "rw");
+    // テーブル作成時にインデックスが定義されていれば構築する
+    buildIndexes();
   }
 
   public void truncate() throws IOException {
@@ -76,6 +81,13 @@ public class Table {
 
     file.seek((long) targetPage * PAGE_SIZE);
     file.write(page);
+
+    // インデックスに追加
+    for (Map.Entry<String, Index> e : indexes.entrySet()) {
+      String col = e.getKey();
+      Index idx = e.getValue();
+      idx.add(row.get(col), row);
+    }
   }
 
   public List<Row> scan() throws IOException {
@@ -169,5 +181,33 @@ public class Table {
 
   public void close() throws IOException {
     file.close();
+  }
+
+  private void buildIndexes() throws IOException {
+    // 定義済みのカラムで index=true のものを作成し、既存データをスキャンして登録
+    for (Schema.Column column : schema.getColumns()) {
+      if (column.isIndexed()) {
+        indexes.put(column.name(), new Index());
+      }
+    }
+
+    if (indexes.isEmpty()) return;
+
+    for (Row row : scan()) {
+      for (String col : indexes.keySet()) {
+        Index idx = indexes.get(col);
+        idx.add(row.get(col), row);
+      }
+    }
+  }
+
+  public List<Row> searchByIndex(String column, Object value) {
+    Index idx = indexes.get(column);
+
+    if (idx == null) {
+        throw new IllegalStateException("No index found for column: " + column);
+    }
+
+    return idx.search(value);
   }
 }

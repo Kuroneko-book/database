@@ -55,7 +55,8 @@ public class QueryExecutor implements ExecutionContext {
   }
 
   private void executeSelect(Statement.Select statement) throws IOException {
-    Plan plan = planner.createPlan(statement);
+    Schema schema = catalog.requireSchema(statement.tableName());
+    Plan plan = planner.createPlan(statement, schema);
     plan.execute(this, statement);
   }
 
@@ -91,10 +92,40 @@ public class QueryExecutor implements ExecutionContext {
 
   @Override
   public void executeIndexScan(Statement.Select statement) throws IOException {
-    // 現時点では実データのインデックス構造は未実装だが、
-    // id 条件を利用するという実行方法の分岐を示す。
-    // ここでは SeqScan と同じ処理を行いつつ、IndexScan 経路を表示する。
-    executeSeqScan(statement);
+    Table table = catalog.requireTable(statement.tableName());
+    Schema schema = catalog.requireSchema(statement.tableName());
+
+    Statement.Condition condition = statement.whereCondition();
+
+    Object rawValue = condition.right();
+    Schema.Column column = schema.getColumn(condition.left());
+    Object value = rawValue;
+
+    if (column != null) {
+      value = parseValue(condition.right(), column);
+    }
+
+    List<Row> rows = table.searchByIndex(condition.left(), value);
+    List<Row> qualifiedRows = new ArrayList<>();
+
+    for (Row row : rows) {
+      qualifiedRows.add(qualifyRow(statement.tableName(), schema, row));
+    }
+
+    boolean hasJoin = statement.joinClause() != null;
+
+    if (hasJoin) {
+      qualifiedRows = executeJoin(qualifiedRows, statement.joinClause());
+    }
+
+    List<Row> filteredRows = new ArrayList<>();
+    for (Row row : qualifiedRows) {
+      if (matches(row, condition)) {
+        filteredRows.add(row);
+      }
+    }
+
+    printRows(filteredRows, statement.selectColumns(), hasJoin);
   }
 
   private List<Row> executeJoin(List<Row> leftRows, JoinClause joinClause) throws IOException {

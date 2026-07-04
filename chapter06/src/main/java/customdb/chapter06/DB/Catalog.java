@@ -127,7 +127,13 @@ public class Catalog {
     List<String> columnTexts = new ArrayList<>();
 
     for (Schema.Column column : schema.getColumns()) {
-      String columnText = column.name() + ":" + column.type().name() + ":" + column.length();
+      String columnText = column.name()
+          + ":"
+          + column.type().name()
+          + ":"
+          + column.length()
+          + ":"
+          + (column.isIndexed() ? "1" : "0");
 
       columnTexts.add(columnText);
     }
@@ -151,17 +157,18 @@ public class Catalog {
       String[] columnTexts = columnsPart.split(",");
 
       for (String columnText : columnTexts) {
-        String[] columnParts = columnText.split(":", 3);
+        String[] columnParts = columnText.split(":");
 
-        if (columnParts.length != 3) {
+        if (columnParts.length < 3 || columnParts.length > 4) {
           throw new IllegalArgumentException("Invalid column definition: " + columnText);
         }
 
         String columnName = columnParts[0];
         Schema.DataType type = Schema.DataType.valueOf(columnParts[1].toUpperCase());
         int length = Integer.parseInt(columnParts[2]);
+        boolean indexed = columnParts.length == 4 && columnParts[3].equals("1");
 
-        columns.add(new Schema.Column(columnName, type, length));
+        columns.add(new Schema.Column(columnName, type, length, indexed));
       }
     }
 

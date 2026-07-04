@@ -182,6 +182,7 @@ public class SimpleParser {
       index++;
 
       int length = 0;
+      boolean indexed = false;
 
       // string型の場合は長さを指定する必要がある
       if (index < tokens.size() && tokens.get(index).equals("(")) {
@@ -198,7 +199,12 @@ public class SimpleParser {
         index++;
       }
 
-      columns.add(new Schema.Column(columnName, type, length));
+      if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "index")) {
+        indexed = true;
+        index++;
+      }
+
+      columns.add(new Schema.Column(columnName, type, length, indexed));
 
       if (index < tokens.size() && tokens.get(index).equals(",")) {
         index++;

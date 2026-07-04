@@ -42,7 +42,7 @@ public class Schema {
     return pageSize / getRecordSize();
   }
 
-  public record Column(String name, DataType type, int length) {
+  public record Column(String name, DataType type, int length, boolean indexed) {
 
     public int size() {
       return switch (type) {
@@ -51,6 +51,10 @@ public class Schema {
         case DOUBLE -> 8;
         case STRING -> 4 + length;
       };
+    }
+
+    public boolean isIndexed() {
+      return indexed;
     }
   }
 

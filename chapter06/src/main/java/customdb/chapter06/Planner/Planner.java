@@ -1,5 +1,6 @@
 package customdb.chapter06.Planner;
 
+import customdb.chapter06.DB.Schema;
 import customdb.chapter06.Plan.IndexScanPlan;
 import customdb.chapter06.Plan.Plan;
 import customdb.chapter06.Plan.SeqScanPlan;
@@ -8,8 +9,7 @@ import customdb.chapter06.Parser.Statement;
 // AST を実行計画へ変換する
 public class Planner {
 
-    public Plan createPlan(Statement.Select statement) {
-
+    public Plan createPlan(Statement.Select statement, Schema schema) {
         Statement.Condition condition = statement.whereCondition();
 
         // WHERE句がない
@@ -17,8 +17,9 @@ public class Planner {
             return new SeqScanPlan(statement.tableName(), null);
         }
 
-        // idならインデックスを利用
-        if (condition.left().equals("id")) {
+        Schema.Column column = schema.getColumn(condition.left());
+
+        if (column != null && column.isIndexed()) {
             return new IndexScanPlan(statement.tableName(), condition);
         }
 
