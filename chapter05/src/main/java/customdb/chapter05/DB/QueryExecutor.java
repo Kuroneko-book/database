@@ -168,7 +168,18 @@ public class QueryExecutor {
       case INTEGER -> Integer.parseInt(value);
       case FLOAT -> Float.parseFloat(value);
       case DOUBLE -> Double.parseDouble(value);
-      case STRING -> value;
+      case STRING -> {
+        if(value.length() > column.length()) {
+          throw new IllegalArgumentException(
+              "Value length exceeds column length. column="
+                  + column.name()
+                  + ", length="
+                  + column.length()
+                  + ", value="
+                  + value);
+        }
+        yield value;
+      }
     };
   }
 
@@ -350,13 +361,9 @@ public class QueryExecutor {
     }
   }
 
-  private boolean isQuote(String value) {
-    return value.length() >= 2 && value.startsWith("'") && value.endsWith("'");
-  }
-
   // クウォートを削除
   private String stripQuote(String value) {
-    if (isQuote(value)) {
+    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
       return value.substring(1, value.length() - 1);
     }
 

@@ -121,11 +121,10 @@ public class Table {
         case DOUBLE -> bb.putDouble((Double) value);
         case STRING -> {
           byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
-          int len = Math.min(bytes.length, column.length());
-          bb.putInt(len);
-          bb.put(bytes, 0, len);
+          bb.putInt(bytes.length);
+          bb.put(bytes, 0, bytes.length);
 
-          byte[] padding = new byte[column.length() - len];
+          byte[] padding = new byte[column.length() - bytes.length];
           bb.put(padding);
         }
       }
