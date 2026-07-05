@@ -169,7 +169,7 @@ public class QueryExecutor {
       case FLOAT -> Float.parseFloat(value);
       case DOUBLE -> Double.parseDouble(value);
       case STRING -> {
-        if(value.length() > column.length()) {
+        if (value.length() > column.length()) {
           throw new IllegalArgumentException(
               "Value length exceeds column length. column="
                   + column.name()
