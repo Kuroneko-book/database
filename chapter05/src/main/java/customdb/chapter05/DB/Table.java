@@ -121,7 +121,7 @@ public class Table {
         case DOUBLE -> bb.putDouble((Double) value);
         case STRING -> {
           byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
-          int len = Math.min(bytes.length, column.size());
+          int len = Math.min(bytes.length, column.length());
           bb.putInt(len);
           bb.put(bytes, 0, len);
 
@@ -151,7 +151,7 @@ public class Table {
         case DOUBLE -> row.put(column.name(), bb.getDouble());
         case STRING -> {
           int len = bb.getInt();
-          byte[] bytes = new byte[column.length()];
+          byte[] bytes = new byte[len];
           bb.get(bytes, 0, len);
           String value = new String(bytes, StandardCharsets.UTF_8);
           row.put(column.name(), value);

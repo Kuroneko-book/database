@@ -57,6 +57,10 @@ public class QueryExecutor {
     List<Row> rows = new ArrayList<>();
 
     for (Row row : leftTable.scan()) {
+      if (statement.joinClause() == null) {
+        rows.add(row);
+        continue;
+      }
       rows.add(qualifyRow(statement.tableName(), leftSchema, row));
     }
 
@@ -186,7 +190,7 @@ public class QueryExecutor {
       String columnName = column.name();
       Object value = row.get(columnName);
 
-      qualified.put(columnName, value);
+      // qualified.put(columnName, value);
       qualified.put(tableName + "." + columnName, value);
     }
 
@@ -289,32 +293,6 @@ public class QueryExecutor {
     throw new IllegalArgumentException("Unknown column: " + columnName);
   }
 
-  // private Object resolveOperand(Row row, String name) {
-  //   if (row.contains(name)) {
-  //     return row.get(name);
-  //   }
-
-  //   String suffix = "." + name;
-  //   Object found = null;
-  //   int count = 0;
-
-  //   for (String key : row.keySet()) {
-  //     if (key.endsWith(suffix)) {
-  //       found = row.get(key);
-  //       count++;
-  //     }
-  //   }
-
-  //   if (count == 1) {
-  //     return found;
-  //   }
-
-  //   if (count > 1) {
-  //     throw new IllegalArgumentException("Ambiguous column name: " + name);
-  //   }
-
-  //   throw new IllegalArgumentException("Unknown column: " + name);
-  // }
 
   // 右辺の値を、リテラル値またはカラム名として解決する（where age >= 20 or join on users.id = orders.user_id）
   private Object resolveColumnOrLiteral(Row row, String value) {
