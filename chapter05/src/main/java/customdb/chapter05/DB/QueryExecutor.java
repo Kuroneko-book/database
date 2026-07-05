@@ -293,7 +293,6 @@ public class QueryExecutor {
     throw new IllegalArgumentException("Unknown column: " + columnName);
   }
 
-
   // 右辺の値を、リテラル値またはカラム名として解決する（where age >= 20 or join on users.id = orders.user_id）
   private Object resolveColumnOrLiteral(Row row, String value) {
     try {
