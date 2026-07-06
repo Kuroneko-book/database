@@ -16,6 +16,11 @@ public class Table {
   private final Schema schema;
   private final RandomAccessFile file;
 
+  // レコード定義
+  public record RecordId(int pageNo, int slotNo) {}
+
+  public record Record(RecordId recordId, Row row) {}
+
   public Table(Schema schema, Path path) throws IOException {
     this.schema = schema;
     if (path.getParent() != null && !Files.exists(path.getParent())) {
@@ -81,8 +86,18 @@ public class Table {
   public List<Row> scan() throws IOException {
     List<Row> rows = new ArrayList<>();
 
+    for (Record record : scanRecords()) {
+      rows.add(record.row());
+    }
+
+    return rows;
+  }
+
+  public List<Record> scanRecords() throws IOException {
+    List<Record> records = new ArrayList<>();
+
     int recordSize = schema.getRecordSize();
-    int maxSlots = PAGE_SIZE / recordSize;
+    int maxSlots = schema.getMaxSlots(PAGE_SIZE);
     int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
 
     for (int p = 0; p < numPages; p++) {
@@ -98,13 +113,44 @@ public class Table {
           Row row = deserialize(recordBytes);
 
           if (row != null) {
-            rows.add(row);
+            records.add(new Record(new RecordId(p, s), row));
           }
         }
       }
     }
 
-    return rows;
+    return records;
+  }
+
+  public void update(RecordId recordId, Row row) throws IOException {
+    int recordSize = schema.getRecordSize();
+    int offset = recordId.slotNo() * recordSize;
+
+    byte[] page = new byte[PAGE_SIZE];
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.read(page);
+
+    byte[] recordBytes = serialize(row);
+    System.arraycopy(recordBytes, 0, page, offset, recordSize);
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.write(page);
+  }
+
+  public void delete(RecordId recordId) throws IOException {
+    int recordSize = schema.getRecordSize();
+    int offset = recordId.slotNo() * recordSize;
+
+    byte[] page = new byte[PAGE_SIZE];
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.read(page);
+
+    page[offset] = 0;
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.write(page);
   }
 
   // Row -> byte[]

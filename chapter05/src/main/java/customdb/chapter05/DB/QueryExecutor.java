@@ -15,14 +15,16 @@ public class QueryExecutor {
   }
 
   public void execute(Statement statement) throws IOException {
-
-    // SQL 文の種類に応じて適切な処理を呼び出す
     if (statement instanceof Statement.CreateTable createTableStatement) {
       executeCreateTable(createTableStatement);
     } else if (statement instanceof Statement.Insert insertStatement) {
       executeInsert(insertStatement);
     } else if (statement instanceof Statement.Select selectStatement) {
       executeSelect(selectStatement);
+    } else if (statement instanceof Statement.Update updateStatement) {
+      executeUpdate(updateStatement);
+    } else if (statement instanceof Statement.Delete deleteStatement) {
+      executeDelete(deleteStatement);
     } else {
       throw new IllegalArgumentException(
           "Unsupported statement: " + statement.getClass().getName());
@@ -81,6 +83,50 @@ public class QueryExecutor {
     }
 
     printRows(filteredRows, statement.selectColumns(), hasJoin);
+  }
+
+  private void executeUpdate(Statement.Update statement) throws IOException {
+    Schema schema = catalog.requireSchema(statement.tableName());
+    Table table = catalog.requireTable(statement.tableName());
+
+    Schema.Column targetColumn = schema.getColumn(statement.columnName());
+
+    if (targetColumn == null) {
+      throw new IllegalArgumentException("Unknown column: " + statement.columnName());
+    }
+
+    Object newValue = parseValue(statement.value(), targetColumn);
+
+    int updatedCount = 0;
+
+    for (Table.Record record : table.scanRecords()) {
+      Row row = record.row();
+
+      if (matches(row, statement.whereCondition())) {
+        row.put(targetColumn.name(), newValue);
+        table.update(record.recordId(), row);
+        updatedCount++;
+      }
+    }
+
+    System.out.println("Updated " + updatedCount + " row(s).");
+  }
+
+  private void executeDelete(Statement.Delete statement) throws IOException {
+    Table table = catalog.requireTable(statement.tableName());
+
+    int deletedCount = 0;
+
+    for (Table.Record record : table.scanRecords()) {
+      Row row = record.row();
+
+      if (matches(row, statement.whereCondition())) {
+        table.delete(record.recordId());
+        deletedCount++;
+      }
+    }
+
+    System.out.println("Deleted " + deletedCount + " row(s).");
   }
 
   private List<Row> executeJoin(List<Row> leftRows, JoinClause joinClause) throws IOException {
