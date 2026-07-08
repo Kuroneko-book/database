@@ -5,6 +5,7 @@ import customdb.chapter07.DB.Schema;
 import customdb.chapter07.DB.Table;
 import customdb.chapter07.Parser.Statement;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class InsertOperator implements Operator {
@@ -85,12 +86,16 @@ public class InsertOperator implements Operator {
       case FLOAT -> Float.parseFloat(value);
       case DOUBLE -> Double.parseDouble(value);
       case STRING -> {
-        if (value.length() > column.length()) {
+        // 格納は UTF-8 バイト列なので、char 数ではなくバイト長で上限を判定する
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length > column.length()) {
           throw new IllegalArgumentException(
-              "Value length exceeds column length. column="
+              "Value byte length exceeds column length. column="
                   + column.name()
                   + ", length="
                   + column.length()
+                  + ", byteLength="
+                  + bytes.length
                   + ", value="
                   + value);
         }
