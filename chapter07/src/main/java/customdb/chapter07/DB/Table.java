@@ -33,9 +33,11 @@ public class Table {
     buildIndexes();
   }
 
-  public void truncate() throws IOException {
-    file.setLength(0);
-  }
+public void truncate() throws IOException {
+  file.setLength(0);
+  indexes.clear();
+  buildIndexes();
+}
 
   public void insert(Row row) throws IOException {
     int recordSize = schema.getRecordSize();
