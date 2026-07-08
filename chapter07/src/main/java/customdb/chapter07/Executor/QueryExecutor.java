@@ -52,6 +52,10 @@ public class QueryExecutor {
 
     if (count == 0 && statement instanceof Statement.Select) {
       System.out.println("(empty)");
+    } else if (statement instanceof Statement.Update) {
+      System.out.println("Updated " + count + " row(s).");
+    } else if (statement instanceof Statement.Delete) {
+      System.out.println("Deleted " + count + " row(s).");
     }
 
     rootPlan.close();

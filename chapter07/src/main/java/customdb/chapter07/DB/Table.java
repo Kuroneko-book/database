@@ -18,6 +18,8 @@ public class Table {
   private final Schema schema;
   private final RandomAccessFile file;
   private final Map<String, Index> indexes = new HashMap<>();
+  public record RecordId(int pageNo, int slotNo) {}
+  public record Record(RecordId recordId, Row row) {}
 
   public Table(Schema schema, Path path) throws IOException {
     this.schema = schema;
@@ -93,8 +95,19 @@ public class Table {
   public List<Row> scan() throws IOException {
     List<Row> rows = new ArrayList<>();
 
+    for (Record record : scanRecords()) {
+      rows.add(record.row());
+    }
+
+    return rows;
+  }
+
+  // 各レコードを物理位置（RecordId）付きで取得する
+  public List<Record> scanRecords() throws IOException {
+    List<Record> records = new ArrayList<>();
+
     int recordSize = schema.getRecordSize();
-    int maxSlots = PAGE_SIZE / recordSize;
+    int maxSlots = schema.getMaxSlots(PAGE_SIZE);
     int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
 
     for (int p = 0; p < numPages; p++) {
@@ -110,13 +123,46 @@ public class Table {
           Row row = deserialize(recordBytes);
 
           if (row != null) {
-            rows.add(row);
+            records.add(new Record(new RecordId(p, s), row));
           }
         }
       }
     }
 
-    return rows;
+    return records;
+  }
+
+  // 指定した物理位置のレコードを新しい内容で上書きする
+  public void update(RecordId recordId, Row row) throws IOException {
+    int recordSize = schema.getRecordSize();
+    int offset = recordId.slotNo() * recordSize;
+
+    byte[] page = new byte[PAGE_SIZE];
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.read(page);
+
+    byte[] recordBytes = serialize(row);
+    System.arraycopy(recordBytes, 0, page, offset, recordSize);
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.write(page);
+  }
+
+  // 指定した物理位置のレコードを削除する（使用中フラグを 0 に戻す）
+  public void delete(RecordId recordId) throws IOException {
+    int recordSize = schema.getRecordSize();
+    int offset = recordId.slotNo() * recordSize;
+
+    byte[] page = new byte[PAGE_SIZE];
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.read(page);
+
+    page[offset] = 0;
+
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.write(page);
   }
 
   // Row -> byte[]
@@ -198,6 +244,13 @@ public class Table {
         idx.add(row.get(col), row);
       }
     }
+  }
+
+  // update / delete 後にインデックスを最新のデータで作り直す。
+  // Index は削除に対応していないため、現在のファイル内容から丸ごと再構築する。
+  public void rebuildIndexes() throws IOException {
+    indexes.clear();
+    buildIndexes();
   }
 
   public List<Row> searchByIndex(String column, Object value) {

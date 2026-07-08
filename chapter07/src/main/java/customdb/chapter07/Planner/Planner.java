@@ -3,6 +3,7 @@ package customdb.chapter07.Planner;
 import customdb.chapter07.DB.Catalog;
 import customdb.chapter07.DB.Schema;
 import customdb.chapter07.DB.Table;
+import customdb.chapter07.Operator.DeleteOperator;
 import customdb.chapter07.Operator.FilterOperator;
 import customdb.chapter07.Operator.IndexScanOperator;
 import customdb.chapter07.Operator.InsertOperator;
@@ -10,6 +11,7 @@ import customdb.chapter07.Operator.NestedLoopJoinOperator;
 import customdb.chapter07.Operator.Operator;
 import customdb.chapter07.Operator.ProjectOperator;
 import customdb.chapter07.Operator.SeqScanOperator;
+import customdb.chapter07.Operator.UpdateOperator;
 import customdb.chapter07.Parser.Statement;
 
 public class Planner {
@@ -24,6 +26,10 @@ public class Planner {
       return createSelectPlan(selectStmt);
     } else if (statement instanceof Statement.Insert insertStmt) {
       return createInsertPlan(insertStmt);
+    } else if (statement instanceof Statement.Update updateStmt) {
+      return createUpdatePlan(updateStmt);
+    } else if (statement instanceof Statement.Delete deleteStmt) {
+      return createDeletePlan(deleteStmt);
     } else {
       throw new IllegalArgumentException("Unsupported statement for planning.");
     }
@@ -70,5 +76,16 @@ public class Planner {
     Table table = catalog.requireTable(statement.tableName());
     Schema schema = catalog.requireSchema(statement.tableName());
     return new InsertOperator(table, schema, statement);
+  }
+
+  private Operator createUpdatePlan(Statement.Update statement) {
+    Table table = catalog.requireTable(statement.tableName());
+    Schema schema = catalog.requireSchema(statement.tableName());
+    return new UpdateOperator(table, schema, statement);
+  }
+
+  private Operator createDeletePlan(Statement.Delete statement) {
+    Table table = catalog.requireTable(statement.tableName());
+    return new DeleteOperator(table, statement);
   }
 }

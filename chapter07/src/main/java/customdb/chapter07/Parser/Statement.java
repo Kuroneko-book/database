@@ -13,6 +13,11 @@ public interface Statement {
       List<String> selectColumns, String tableName, Condition whereCondition, JoinClause joinClause)
       implements Statement {}
 
+  record Update(String tableName, String columnName, String value, Condition whereCondition)
+      implements Statement {}
+
+  record Delete(String tableName, Condition whereCondition) implements Statement {}
+
   record Condition(String left, String operator, String right) {}
 
   record JoinClause(String tableName, Condition onCondition) {}
