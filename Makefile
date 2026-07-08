@@ -35,4 +35,4 @@ check:
 insert:
 	./insert_data.sh $(CHAP)
 
-.PHONY: up down build shell run fmt check insert insert_ch05 testdb_ch05
+.PHONY: up down build shell run fmt check insert
