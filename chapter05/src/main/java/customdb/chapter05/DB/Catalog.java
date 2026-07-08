@@ -79,8 +79,22 @@ public class Catalog {
   }
 
   public void close() throws IOException {
+    IOException firstException = null;
+
     for (Table table : tables.values()) {
-      table.close();
+      try {
+        table.close();
+      } catch (IOException e) {
+        if (firstException == null) {
+          firstException = e;
+        } else {
+          firstException.addSuppressed(e);
+        }
+      }
+    }
+
+    if (firstException != null) {
+      throw firstException;
     }
   }
 
