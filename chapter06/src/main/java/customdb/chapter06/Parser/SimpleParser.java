@@ -24,6 +24,8 @@ public class SimpleParser {
       case "select" -> parseSelect(tokens);
       case "insert" -> parseInsert(tokens);
       case "create" -> parseCreateTable(tokens);
+      case "update" -> parseUpdate(tokens);
+      case "delete" -> parseDelete(tokens);
       default -> throw new IllegalArgumentException("Unsupported SQL command: " + command);
     };
   }
@@ -220,6 +222,71 @@ public class SimpleParser {
     }
 
     return new Statement.CreateTable(tableName, columns);
+  }
+
+  private Statement.Update parseUpdate(List<String> tokens) {
+    expect(tokens, 0, "update");
+
+    if (tokens.size() < 6) {
+      throw new IllegalArgumentException("Invalid UPDATE statement.");
+    }
+
+    String tableName = tokens.get(1);
+    int index = 2;
+
+    expect(tokens, index, "set");
+    index++;
+
+    String columnName = tokens.get(index);
+    index++;
+
+    expect(tokens, index, "=");
+    index++;
+
+    String value = tokens.get(index);
+    index++;
+
+    Statement.Condition whereCondition = null;
+
+    if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "where")) {
+      index++;
+      whereCondition = parseCondition(tokens, index);
+      index += 3;
+      }
+
+    if (index < tokens.size()) {
+      throw new IllegalArgumentException(
+          "Unexpected token in UPDATE statement: " + tokens.get(index));
+    }
+
+    return new Statement.Update(tableName, columnName, value, whereCondition);
+  }
+
+  private Statement.Delete parseDelete(List<String> tokens) {
+    expect(tokens, 0, "delete");
+    expect(tokens, 1, "from");
+
+    if (tokens.size() < 3) {
+      throw new IllegalArgumentException("Invalid DELETE statement.");
+    }
+
+    String tableName = tokens.get(2);
+    int index = 3;
+
+    Statement.Condition whereCondition = null;
+
+    if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "where")) {
+      index++;
+      whereCondition = parseCondition(tokens, index);
+      index += 3;
+    }
+
+    if (index < tokens.size()) {
+      throw new IllegalArgumentException(
+          "Unexpected token in DELETE statement: " + tokens.get(index));
+    }
+
+    return new Statement.Delete(tableName, whereCondition);
   }
 
   private Statement.Condition parseCondition(List<String> tokens, int index) {

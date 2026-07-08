@@ -1,5 +1,6 @@
 package customdb.chapter06.DB;
 
+import customdb.chapter06.Executor.QueryExecutor;
 import customdb.chapter06.Parser.SimpleParser;
 import customdb.chapter06.Parser.Statement;
 import java.io.IOException;

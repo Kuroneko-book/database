@@ -19,7 +19,7 @@ public class Planner {
 
     Schema.Column column = schema.getColumn(condition.left());
 
-    if (column != null && column.isIndexed()) {
+    if (column != null && column.isIndexed() && condition.operator().equals("=")) {
       return new IndexScanPlan(statement.tableName(), condition);
     }
 

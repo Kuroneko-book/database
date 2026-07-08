@@ -171,4 +171,28 @@ public class Index {
     }
     return btree.search(key);
   }
+
+  public void remove(Object keyObj, Row row) {
+    if (keyObj == null) {
+      return;
+    }
+
+    int key;
+
+    if (keyObj instanceof Number number) {
+      key = number.intValue();
+    } else {
+      try {
+        key = Integer.parseInt(keyObj.toString());
+      } catch (NumberFormatException e) {
+        return;
+      }
+    }
+
+    List<Row> rows = btree.search(key);
+
+    if (!rows.isEmpty()) {
+      rows.remove(row);
+    }
+  }
 }

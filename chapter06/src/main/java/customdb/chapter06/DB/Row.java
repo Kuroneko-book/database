@@ -35,4 +35,22 @@ public class Row {
   public String toString() {
     return values.toString();
   }
+
+  @Override
+  public boolean equals(Object obj) {
+    if (this == obj) {
+      return true;
+    }
+
+    if (!(obj instanceof Row other)) {
+      return false;
+    }
+
+    return values.equals(other.values);
+  }
+
+  @Override
+  public int hashCode() {
+    return values.hashCode();
+  }
 }
