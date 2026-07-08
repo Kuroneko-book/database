@@ -24,15 +24,16 @@ public class IndexScanOperator implements Operator {
 
   @Override
   public void open() throws IOException {
-    Object rawValue = condition.right();
     Schema.Column column = schema.getColumn(condition.left());
-    Object value = rawValue;
+    Object value = condition.right();
+
+    String columnName = column != null ? column.name() : condition.left();
 
     if (column != null) {
       value = parseValue(condition.right(), column);
     }
 
-    List<Row> rows = table.searchByIndex(condition.left(), value);
+    List<Row> rows = table.searchByIndex(columnName, value);
     this.iterator = rows.iterator();
   }
 
