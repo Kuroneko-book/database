@@ -252,7 +252,7 @@ public class SimpleParser {
       index++;
       whereCondition = parseCondition(tokens, index);
       index += 3;
-      }
+    }
 
     if (index < tokens.size()) {
       throw new IllegalArgumentException(

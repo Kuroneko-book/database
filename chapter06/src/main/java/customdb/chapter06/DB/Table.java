@@ -18,7 +18,9 @@ public class Table {
   private final Schema schema;
   private final RandomAccessFile file;
   private final Map<String, Index> indexes = new HashMap<>();
+
   public record RecordId(int pageNo, int slotNo) {}
+
   public record Record(RecordId recordId, Row row) {}
 
   public Table(Schema schema, Path path) throws IOException {
@@ -139,8 +141,7 @@ public class Table {
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.readFully(page);
 
-    byte[] recordBytes =
-        Arrays.copyOfRange(page, offset, offset + recordSize);
+    byte[] recordBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
 
     return deserialize(recordBytes);
   }

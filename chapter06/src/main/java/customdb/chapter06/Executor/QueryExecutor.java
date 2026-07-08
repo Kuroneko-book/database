@@ -1,9 +1,9 @@
 package customdb.chapter06.Executor;
 
 import customdb.chapter06.DB.Catalog;
+import customdb.chapter06.DB.Row;
 import customdb.chapter06.DB.Schema;
 import customdb.chapter06.DB.Table;
-import customdb.chapter06.DB.Row;
 import customdb.chapter06.Parser.Statement;
 import customdb.chapter06.Parser.Statement.JoinClause;
 import customdb.chapter06.Plan.Plan;
