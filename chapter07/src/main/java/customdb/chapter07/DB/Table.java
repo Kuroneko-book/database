@@ -9,8 +9,10 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Queue;
 
 public class Table {
   private static final int PAGE_SIZE = 4096; // ページサイズを4KBに設定
@@ -18,6 +20,8 @@ public class Table {
   private final Schema schema;
   private final RandomAccessFile file;
   private final Map<String, Index> indexes = new HashMap<>();
+
+  private final Queue<RecordId> freeList = new LinkedList<>();
 
   public record RecordId(int pageNo, int slotNo) {}
 
@@ -31,12 +35,14 @@ public class Table {
     this.file = new RandomAccessFile(path.toFile(), "rw");
     // テーブル作成時にインデックスが定義されていれば構築する
     buildIndexes();
+    buildFreeList();
   }
 
   public void truncate() throws IOException {
     file.setLength(0);
     indexes.clear();
     buildIndexes();
+    freeList.clear();
   }
 
   public void insert(Row row) throws IOException {
@@ -45,32 +51,19 @@ public class Table {
 
     int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
 
-    int targetPage = -1;
-    int targetSlot = -1;
+    int targetPage;
+    int targetSlot;
 
-    for (int p = 0; p < numPages; p++) {
-      byte[] page = new byte[PAGE_SIZE];
-      file.seek((long) p * PAGE_SIZE);
-      file.read(page);
-
-      for (int s = 0; s < maxSlots; s++) {
-        int offset = s * recordSize;
-
-        if (page[offset] == 0) {
-          targetPage = p;
-          targetSlot = s;
-          break;
-        }
-      }
-
-      if (targetPage != -1) {
-        break;
-      }
-    }
-
-    if (targetPage == -1) {
+    if (!freeList.isEmpty()) {
+      RecordId freeId = freeList.poll();
+      targetPage = freeId.pageNo();
+      targetSlot = freeId.slotNo();
+    } else {
       targetPage = numPages;
       targetSlot = 0;
+      for (int s = 1; s < maxSlots; s++) {
+        freeList.offer(new RecordId(targetPage, s));
+      }
     }
 
     byte[] page = new byte[PAGE_SIZE];
@@ -167,6 +160,8 @@ public class Table {
 
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.write(page);
+
+    freeList.offer(recordId);
   }
 
   // Row -> byte[]
@@ -233,7 +228,6 @@ public class Table {
   }
 
   private void buildIndexes() throws IOException {
-    // 定義済みのカラムで index=true のものを作成し、既存データをスキャンして登録
     for (Schema.Column column : schema.getColumns()) {
       if (column.isIndexed()) {
         indexes.put(column.name(), new Index());
@@ -255,6 +249,28 @@ public class Table {
   public void rebuildIndexes() throws IOException {
     indexes.clear();
     buildIndexes();
+  }
+
+  private void buildFreeList() throws IOException {
+    freeList.clear();
+
+    int recordSize = schema.getRecordSize();
+    int maxSlots = schema.getMaxSlots(PAGE_SIZE);
+    int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+
+    for (int p = 0; p < numPages; p++) {
+      byte[] page = new byte[PAGE_SIZE];
+      file.seek((long) p * PAGE_SIZE);
+      file.read(page);
+
+      for (int s = 0; s < maxSlots; s++) {
+        int offset = s * recordSize;
+
+        if (page[offset] == 0) {
+          freeList.offer(new RecordId(p, s));
+        }
+      }
+    }
   }
 
   public List<Row> searchByIndex(String column, Object value) {
