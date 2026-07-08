@@ -37,8 +37,12 @@ public class NestedLoopJoinOperator implements Operator {
       }
 
       Row joined = new Row();
-      joined.putAll(currentLeftRow);
-      joined.putAll(rightRow);
+      for (String key : currentLeftRow.keySet()) {
+        if (key.contains(".")) joined.put(key, currentLeftRow.get(key));
+      }
+      for (String key : rightRow.keySet()) {
+        if (key.contains(".")) joined.put(key, rightRow.get(key));
+      }
 
       if (ConditionEvaluator.matches(joined, onCondition)) {
         return joined;
