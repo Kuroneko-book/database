@@ -36,29 +36,31 @@ public class QueryExecutor {
   private void executePlan(Operator rootPlan, Statement statement) throws IOException {
     rootPlan.open();
 
-    int count = 0;
-    while (true) {
-      Row row = rootPlan.next();
-      if (row == null) {
-        break;
+    try {
+      int count = 0;
+      while (true) {
+        Row row = rootPlan.next();
+        if (row == null) {
+          break;
+        }
+        if (statement instanceof Statement.Select) {
+          System.out.println(row);
+        } else if (statement instanceof Statement.Insert insertStmt) {
+          System.out.println("Inserted into " + insertStmt.tableName() + ": " + row);
+        }
+        count++;
       }
-      if (statement instanceof Statement.Select) {
-        System.out.println(row);
-      } else if (statement instanceof Statement.Insert insertStmt) {
-        System.out.println("Inserted into " + insertStmt.tableName() + ": " + row);
+
+      if (count == 0 && statement instanceof Statement.Select) {
+        System.out.println("(empty)");
+      } else if (statement instanceof Statement.Update) {
+        System.out.println("Updated " + count + " row(s).");
+      } else if (statement instanceof Statement.Delete) {
+        System.out.println("Deleted " + count + " row(s).");
       }
-      count++;
+    } finally {
+      rootPlan.close();
     }
-
-    if (count == 0 && statement instanceof Statement.Select) {
-      System.out.println("(empty)");
-    } else if (statement instanceof Statement.Update) {
-      System.out.println("Updated " + count + " row(s).");
-    } else if (statement instanceof Statement.Delete) {
-      System.out.println("Deleted " + count + " row(s).");
-    }
-
-    rootPlan.close();
   }
 
   public void close() throws IOException {
