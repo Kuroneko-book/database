@@ -167,10 +167,11 @@ public class Table {
         case DOUBLE -> bb.putDouble((Double) value);
         case STRING -> {
           byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
-          bb.putInt(bytes.length);
-          bb.put(bytes, 0, bytes.length);
+          final int len = Math.min(bytes.length, column.length());
+          bb.putInt(len);
+          bb.put(bytes, 0, len);
 
-          byte[] padding = new byte[column.length() - bytes.length];
+          byte[] padding = new byte[column.length() - len];
           bb.put(padding);
         }
       }
