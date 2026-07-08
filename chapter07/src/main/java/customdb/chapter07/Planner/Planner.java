@@ -44,7 +44,10 @@ public class Planner {
 
     if (condition != null) {
       Schema.Column column = schema.getColumn(condition.left());
-      if (column != null && column.isIndexed() && column.type() == Schema.DataType.INTEGER && condition.operator().equals("=")) {
+      if (column != null
+          && column.isIndexed()
+          && column.type() == Schema.DataType.INTEGER
+          && condition.operator().equals("=")) {
         plan = new IndexScanOperator(table, schema, statement.tableName(), condition);
       } else {
         plan = new SeqScanOperator(table, schema, statement.tableName());
