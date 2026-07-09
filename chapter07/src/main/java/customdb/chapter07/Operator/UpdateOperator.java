@@ -13,7 +13,6 @@ public class UpdateOperator implements Operator {
   private final Schema schema;
   private final Statement.Update statement;
   private Iterator<Table.Record> iterator;
-  private boolean mutated = false;
 
   public UpdateOperator(Table table, Schema schema, Statement.Update statement) {
     this.table = table;
@@ -41,7 +40,6 @@ public class UpdateOperator implements Operator {
         Object newValue = parseValue(statement.value(), targetColumn);
         row.put(targetColumn.name(), newValue);
         table.update(record.recordId(), row);
-        mutated = true;
         return row;
       }
     }
@@ -51,10 +49,6 @@ public class UpdateOperator implements Operator {
 
   @Override
   public void close() throws IOException {
-    // 書き換えが発生した場合はインデックスを最新の状態に作り直す
-    if (mutated) {
-      table.rebuildIndexes();
-    }
     this.iterator = null;
   }
 

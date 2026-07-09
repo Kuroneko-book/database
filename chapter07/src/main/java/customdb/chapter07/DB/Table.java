@@ -12,6 +12,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 
 public class Table {
@@ -85,7 +86,7 @@ public class Table {
     for (Map.Entry<String, Index> e : indexes.entrySet()) {
       String col = e.getKey();
       Index idx = e.getValue();
-      idx.add(row.get(col), row);
+      idx.add(row.get(col), new RecordId(targetPage, targetSlot));
     }
   }
 
@@ -139,14 +140,29 @@ public class Table {
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.read(page);
 
+    byte[] oldBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
+    Row oldRow = deserialize(oldBytes);
+
     byte[] recordBytes = serialize(row);
     System.arraycopy(recordBytes, 0, page, offset, recordSize);
 
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.write(page);
+
+    if (oldRow != null) {
+      for (Map.Entry<String, Index> e : indexes.entrySet()) {
+        String col = e.getKey();
+        Index idx = e.getValue();
+        Object oldKey = oldRow.get(col);
+        Object newKey = row.get(col);
+        if (!Objects.equals(oldKey, newKey)) {
+          idx.remove(oldKey, recordId);
+          idx.add(newKey, recordId);
+        }
+      }
+    }
   }
 
-  // 指定した物理位置のレコードを削除する（使用中フラグを 0 に戻す）
   public void delete(RecordId recordId) throws IOException {
     int recordSize = schema.getRecordSize();
     int offset = recordId.slotNo() * recordSize;
@@ -156,10 +172,21 @@ public class Table {
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.read(page);
 
+    byte[] oldBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
+    Row oldRow = deserialize(oldBytes);
+
     page[offset] = 0;
 
     file.seek((long) recordId.pageNo() * PAGE_SIZE);
     file.write(page);
+
+    if (oldRow != null) {
+      for (Map.Entry<String, Index> e : indexes.entrySet()) {
+        String col = e.getKey();
+        Index idx = e.getValue();
+        idx.remove(oldRow.get(col), recordId);
+      }
+    }
 
     freeList.offer(recordId);
   }
@@ -236,19 +263,14 @@ public class Table {
 
     if (indexes.isEmpty()) return;
 
-    for (Row row : scan()) {
+    for (Record record : scanRecords()) {
+      Row row = record.row();
+      RecordId recordId = record.recordId();
       for (String col : indexes.keySet()) {
         Index idx = indexes.get(col);
-        idx.add(row.get(col), row);
+        idx.add(row.get(col), recordId);
       }
     }
-  }
-
-  // update / delete 後にインデックスを最新のデータで作り直す。
-  // Index は削除に対応していないため、現在のファイル内容から丸ごと再構築する。
-  public void rebuildIndexes() throws IOException {
-    indexes.clear();
-    buildIndexes();
   }
 
   private void buildFreeList() throws IOException {
@@ -273,13 +295,32 @@ public class Table {
     }
   }
 
-  public List<Row> searchByIndex(String column, Object value) {
+  public List<Row> searchByIndex(String column, Object value) throws IOException {
     Index idx = indexes.get(column);
 
     if (idx == null) {
       throw new IllegalStateException("No index found for column: " + column);
     }
 
-    return idx.search(value);
+    List<Row> rows = new ArrayList<>();
+    for (RecordId recordId : idx.search(value)) {
+      Row row = readRow(recordId);
+      if (row != null) {
+        rows.add(row);
+      }
+    }
+    return rows;
+  }
+
+  private Row readRow(RecordId recordId) throws IOException {
+    int recordSize = schema.getRecordSize();
+    int offset = recordId.slotNo() * recordSize;
+
+    byte[] page = new byte[PAGE_SIZE];
+    file.seek((long) recordId.pageNo() * PAGE_SIZE);
+    file.read(page);
+
+    byte[] recordBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
+    return deserialize(recordBytes);
   }
 }
