@@ -2,21 +2,21 @@ package customdb.chapter08.Operator;
 
 import customdb.chapter08.DB.Row;
 import customdb.chapter08.DB.Schema;
-import customdb.chapter08.DB.Table;
+import customdb.chapter08.DB.Storage;
 import customdb.chapter08.Parser.Statement.Condition;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
 public class IndexScanOperator implements Operator {
-  private final Table table;
+  private final Storage storage;
   private final Schema schema;
   private final String tableName;
   private final Condition condition;
   private Iterator<Row> iterator;
 
-  public IndexScanOperator(Table table, Schema schema, String tableName, Condition condition) {
-    this.table = table;
+  public IndexScanOperator(Storage storage, Schema schema, String tableName, Condition condition) {
+    this.storage = storage;
     this.schema = schema;
     this.tableName = tableName;
     this.condition = condition;
@@ -33,7 +33,7 @@ public class IndexScanOperator implements Operator {
       value = parseValue(condition.right(), column);
     }
 
-    List<Row> rows = table.searchByIndex(columnName, value);
+    List<Row> rows = storage.searchByIndex(columnName, value);
     this.iterator = rows.iterator();
   }
 

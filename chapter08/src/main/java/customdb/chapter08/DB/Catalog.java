@@ -16,7 +16,7 @@ public class Catalog {
   private final Path catalogPath;
 
   private final Map<String, Schema> schemas = new HashMap<>();
-  private final Map<String, Table> tables = new HashMap<>();
+  private final Map<String, Storage> storages = new HashMap<>();
 
   public Catalog(Path baseDir) throws IOException {
     this.baseDir = baseDir;
@@ -38,13 +38,12 @@ public class Catalog {
 
     Path tablePath = getTablePath(tableName);
 
-    Table table = new Table(schema, tablePath);
-
-    // 新規作成時は既存データを消して初期化
-    table.truncate();
+    Storage storage = new FileStorage(tablePath);
+    storage.initialize(schema);
+    storage.truncate();
 
     schemas.put(tableName, schema);
-    tables.put(tableName, table);
+    storages.put(tableName, storage);
 
     save();
   }
@@ -53,8 +52,8 @@ public class Catalog {
     return schemas.get(normalize(tableName));
   }
 
-  public Table getTable(String tableName) {
-    return tables.get(normalize(tableName));
+  public Storage getStorage(String tableName) {
+    return storages.get(normalize(tableName));
   }
 
   public Schema requireSchema(String tableName) {
@@ -67,19 +66,19 @@ public class Catalog {
     return schema;
   }
 
-  public Table requireTable(String tableName) {
-    Table table = getTable(tableName);
+  public Storage requireStorage(String tableName) {
+    Storage storage = getStorage(tableName);
 
-    if (table == null) {
+    if (storage == null) {
       throw new IllegalArgumentException("Table does not exist: " + tableName);
     }
 
-    return table;
+    return storage;
   }
 
   public void close() throws IOException {
-    for (Table table : tables.values()) {
-      table.close();
+    for (Storage storage : storages.values()) {
+      storage.close();
     }
   }
 
@@ -102,10 +101,11 @@ public class Catalog {
         String tableName = normalize(schema.getTableName());
 
         Path tablePath = getTablePath(tableName);
-        Table table = new Table(schema, tablePath);
+        Storage storage = new FileStorage(tablePath);
+        storage.initialize(schema);
 
         schemas.put(tableName, schema);
-        tables.put(tableName, table);
+        storages.put(tableName, storage);
       }
     }
   }

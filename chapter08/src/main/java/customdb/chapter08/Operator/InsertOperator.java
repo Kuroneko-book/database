@@ -2,20 +2,20 @@ package customdb.chapter08.Operator;
 
 import customdb.chapter08.DB.Row;
 import customdb.chapter08.DB.Schema;
-import customdb.chapter08.DB.Table;
+import customdb.chapter08.DB.Storage;
 import customdb.chapter08.Parser.Statement;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class InsertOperator implements Operator {
-  private final Table table;
+  private final Storage storage;
   private final Schema schema;
   private final Statement.Insert statement;
   private boolean executed = false;
 
-  public InsertOperator(Table table, Schema schema, Statement.Insert statement) {
-    this.table = table;
+  public InsertOperator(Storage storage, Schema schema, Statement.Insert statement) {
+    this.storage = storage;
     this.schema = schema;
     this.statement = statement;
   }
@@ -29,7 +29,7 @@ public class InsertOperator implements Operator {
       return null;
     }
     Row row = buildRow(schema, statement);
-    table.insert(row);
+    storage.insert(row);
     executed = true;
     return row;
   }

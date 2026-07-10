@@ -2,7 +2,7 @@ package customdb.chapter08.Planner;
 
 import customdb.chapter08.DB.Catalog;
 import customdb.chapter08.DB.Schema;
-import customdb.chapter08.DB.Table;
+import customdb.chapter08.DB.Storage;
 import customdb.chapter08.Operator.DeleteOperator;
 import customdb.chapter08.Operator.FilterOperator;
 import customdb.chapter08.Operator.IndexScanOperator;
@@ -36,7 +36,7 @@ public class Planner {
   }
 
   private Operator createSelectPlan(Statement.Select statement) {
-    Table table = catalog.requireTable(statement.tableName());
+    Storage storage = catalog.requireStorage(statement.tableName());
     Schema schema = catalog.requireSchema(statement.tableName());
     Statement.Condition condition = statement.whereCondition();
 
@@ -48,20 +48,20 @@ public class Planner {
           && column.isIndexed()
           && column.type() == Schema.DataType.INTEGER
           && condition.operator().equals("=")) {
-        plan = new IndexScanOperator(table, schema, statement.tableName(), condition);
+        plan = new IndexScanOperator(storage, schema, statement.tableName(), condition);
       } else {
-        plan = new SeqScanOperator(table, schema, statement.tableName());
+        plan = new SeqScanOperator(storage, schema, statement.tableName());
       }
     } else {
-      plan = new SeqScanOperator(table, schema, statement.tableName());
+      plan = new SeqScanOperator(storage, schema, statement.tableName());
     }
 
     boolean hasJoin = statement.joinClause() != null;
     if (hasJoin) {
       String rightTableName = statement.joinClause().tableName();
-      Table rightTable = catalog.requireTable(rightTableName);
+      Storage rightStorage = catalog.requireStorage(rightTableName);
       Schema rightSchema = catalog.requireSchema(rightTableName);
-      Operator rightScan = new SeqScanOperator(rightTable, rightSchema, rightTableName);
+      Operator rightScan = new SeqScanOperator(rightStorage, rightSchema, rightTableName);
 
       plan = new NestedLoopJoinOperator(plan, rightScan, statement.joinClause().onCondition());
     }
@@ -76,19 +76,19 @@ public class Planner {
   }
 
   private Operator createInsertPlan(Statement.Insert statement) {
-    Table table = catalog.requireTable(statement.tableName());
+    Storage storage = catalog.requireStorage(statement.tableName());
     Schema schema = catalog.requireSchema(statement.tableName());
-    return new InsertOperator(table, schema, statement);
+    return new InsertOperator(storage, schema, statement);
   }
 
   private Operator createUpdatePlan(Statement.Update statement) {
-    Table table = catalog.requireTable(statement.tableName());
+    Storage storage = catalog.requireStorage(statement.tableName());
     Schema schema = catalog.requireSchema(statement.tableName());
-    return new UpdateOperator(table, schema, statement);
+    return new UpdateOperator(storage, schema, statement);
   }
 
   private Operator createDeletePlan(Statement.Delete statement) {
-    Table table = catalog.requireTable(statement.tableName());
-    return new DeleteOperator(table, statement);
+    Storage storage = catalog.requireStorage(statement.tableName());
+    return new DeleteOperator(storage, statement);
   }
 }

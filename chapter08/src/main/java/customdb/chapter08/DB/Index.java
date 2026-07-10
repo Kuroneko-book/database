@@ -7,7 +7,7 @@ public class Index {
 
   static class BTreeNode {
     int[] keys;
-    List<Table.RecordId>[] values;
+    List<Storage.RecordId>[] values;
     BTreeNode[] children;
     int numKeys;
     boolean isLeaf;
@@ -16,7 +16,7 @@ public class Index {
     BTreeNode(int t, boolean isLeaf) {
       this.isLeaf = isLeaf;
       this.keys = new int[2 * t - 1];
-      this.values = (List<Table.RecordId>[]) new List[2 * t - 1];
+      this.values = (List<Storage.RecordId>[]) new List[2 * t - 1];
       this.children = new BTreeNode[2 * t];
       this.numKeys = 0;
     }
@@ -31,11 +31,11 @@ public class Index {
       this.t = t;
     }
 
-    public List<Table.RecordId> search(int key) {
+    public List<Storage.RecordId> search(int key) {
       return root == null ? null : search(root, key);
     }
 
-    private List<Table.RecordId> search(BTreeNode node, int key) {
+    private List<Storage.RecordId> search(BTreeNode node, int key) {
       int i = 0;
       while (i < node.numKeys && key > node.keys[i]) i++;
 
@@ -46,7 +46,7 @@ public class Index {
       return search(node.children[i], key);
     }
 
-    public void insert(int key, List<Table.RecordId> value) {
+    public void insert(int key, List<Storage.RecordId> value) {
       if (root == null) {
         root = new BTreeNode(t, true);
         root.keys[0] = key;
@@ -67,7 +67,7 @@ public class Index {
       }
     }
 
-    private void insertNonFull(BTreeNode node, int key, List<Table.RecordId> value) {
+    private void insertNonFull(BTreeNode node, int key, List<Storage.RecordId> value) {
       int i = node.numKeys - 1;
       if (node.isLeaf) {
         while (i >= 0 && node.keys[i] > key) {
@@ -120,7 +120,6 @@ public class Index {
       parent.numKeys++;
     }
 
-    // --- 削除 (Delete) ---
     public void delete(int key) {
       if (root == null) return;
       delete(root, key);
@@ -143,7 +142,7 @@ public class Index {
 
         boolean flag = (idx == node.numKeys);
         if (node.children[idx].numKeys < t) {
-          fill(node, idx); // マージまたは借用 (Merge/Borrow)
+          fill(node, idx);
         }
 
         if (flag && idx > node.numKeys) {
@@ -241,7 +240,6 @@ public class Index {
       sibling.numKeys--;
     }
 
-    // ノードのマージ (Merge)
     private void merge(BTreeNode node, int idx) {
       BTreeNode child = node.children[idx];
       BTreeNode sibling = node.children[idx + 1];
@@ -282,39 +280,39 @@ public class Index {
     try {
       return Integer.parseInt(keyObj.toString());
     } catch (NumberFormatException e) {
-      return null; // 整数キーのみサポート
+      return null;
     }
   }
 
-  public void add(Object keyObj, Table.RecordId rid) {
+  public void add(Object keyObj, Storage.RecordId rid) {
     Integer key = normalizeKey(keyObj);
     if (key == null) return;
 
-    List<Table.RecordId> existing = btree.search(key);
+    List<Storage.RecordId> existing = btree.search(key);
     if (existing != null) {
       existing.add(rid);
       return;
     }
 
-    List<Table.RecordId> list = new ArrayList<>();
+    List<Storage.RecordId> list = new ArrayList<>();
     list.add(rid);
     btree.insert(key, list);
   }
 
-  public List<Table.RecordId> search(Object keyObj) {
+  public List<Storage.RecordId> search(Object keyObj) {
     Integer key = normalizeKey(keyObj);
     if (key == null) return List.of();
 
-    List<Table.RecordId> found = btree.search(key);
+    List<Storage.RecordId> found = btree.search(key);
     if (found == null) return List.of();
     return new ArrayList<>(found);
   }
 
-  public void remove(Object keyObj, Table.RecordId rid) {
+  public void remove(Object keyObj, Storage.RecordId rid) {
     Integer key = normalizeKey(keyObj);
     if (key == null) return;
 
-    List<Table.RecordId> list = btree.search(key);
+    List<Storage.RecordId> list = btree.search(key);
     if (list == null) return;
 
     list.remove(rid);

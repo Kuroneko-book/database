@@ -2,26 +2,26 @@ package customdb.chapter08.Operator;
 
 import customdb.chapter08.DB.Row;
 import customdb.chapter08.DB.Schema;
-import customdb.chapter08.DB.Table;
+import customdb.chapter08.DB.Storage;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
 
 public class SeqScanOperator implements Operator {
-  private final Table table;
+  private final Storage storage;
   private final Schema schema;
   private final String tableName;
   private Iterator<Row> iterator;
 
-  public SeqScanOperator(Table table, Schema schema, String tableName) {
-    this.table = table;
+  public SeqScanOperator(Storage storage, Schema schema, String tableName) {
+    this.storage = storage;
     this.schema = schema;
     this.tableName = tableName;
   }
 
   @Override
   public void open() throws IOException {
-    List<Row> rows = table.scan();
+    List<Row> rows = storage.scan();
     this.iterator = rows.iterator();
   }
 
