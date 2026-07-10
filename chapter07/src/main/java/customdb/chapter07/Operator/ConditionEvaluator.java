@@ -50,10 +50,10 @@ public class ConditionEvaluator {
       return resolveColumn(row, value);
     } catch (IllegalArgumentException ignored) {
     }
-    String raw = stripQuote(value);
-    if (isInteger(raw)) return Integer.parseInt(raw);
-    if (isDouble(raw)) return Double.parseDouble(raw);
-    return raw;
+    if (isQuoted(value)) return stripQuote(value);
+    if (isInteger(value)) return Integer.parseInt(value);
+    if (isDouble(value)) return Double.parseDouble(value);
+    return value;
   }
 
   private static int compare(Object left, Object right) {
@@ -62,7 +62,14 @@ public class ConditionEvaluator {
       double r = toDouble(right);
       return Double.compare(l, r);
     }
+    if (left instanceof Number && isDouble(right.toString())) {
+      return Double.compare(toDouble(left), Double.parseDouble(right.toString()));
+    }
     return left.toString().compareTo(right.toString());
+  }
+
+  private static boolean isQuoted(String value) {
+    return value.length() >= 2 && value.startsWith("'") && value.endsWith("'");
   }
 
   private static double toDouble(Object value) {
@@ -89,7 +96,7 @@ public class ConditionEvaluator {
   }
 
   private static String stripQuote(String value) {
-    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
+    if (isQuoted(value)) {
       return value.substring(1, value.length() - 1);
     }
     return value;
