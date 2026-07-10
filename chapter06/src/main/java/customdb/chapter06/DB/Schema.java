@@ -5,6 +5,7 @@ import java.util.List;
 public class Schema {
   private final String tableName;
   private final List<Column> columns;
+  private static final int RECORD_HEADER_SIZE = 1;
 
   public Schema(String tableName, List<Column> columns) {
     this.tableName = tableName;
@@ -29,7 +30,7 @@ public class Schema {
   }
 
   public int getRecordSize() {
-    int size = 1;
+    int size = RECORD_HEADER_SIZE;
 
     for (Column column : columns) {
       size += column.size();

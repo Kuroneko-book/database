@@ -75,6 +75,10 @@ public class QueryExecutor implements ExecutionContext {
     List<Row> rows = new ArrayList<>();
 
     for (Row row : leftTable.scan()) {
+      if (statement.joinClause() == null) {
+        rows.add(row);
+        continue;
+      }
       rows.add(qualifyRow(statement.tableName(), leftSchema, row));
     }
 
@@ -116,6 +120,10 @@ public class QueryExecutor implements ExecutionContext {
     List<Row> qualifiedRows = new ArrayList<>();
 
     for (Row row : rows) {
+      if (statement.joinClause() == null) {
+        qualifiedRows.add(row);
+        continue;
+      }
       qualifiedRows.add(qualifyRow(statement.tableName(), schema, row));
     }
 
@@ -286,7 +294,6 @@ public class QueryExecutor implements ExecutionContext {
       String columnName = column.name();
       Object value = row.get(columnName);
 
-      qualified.put(columnName, value);
       qualified.put(tableName + "." + columnName, value);
     }
 

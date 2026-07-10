@@ -6,6 +6,7 @@ import java.util.List;
 
 public class SimpleParser {
   private final Tokenizer tokenizer;
+  private static final int CONDITION_TOKEN_COUNT = 3;
 
   public SimpleParser() {
     this.tokenizer = new Tokenizer();
@@ -76,7 +77,7 @@ public class SimpleParser {
       index++;
 
       Statement.Condition onCondition = parseCondition(tokens, index);
-      index += 3;
+      index += CONDITION_TOKEN_COUNT;
 
       joinClause = new Statement.JoinClause(joinTableName, onCondition);
     }
@@ -86,7 +87,7 @@ public class SimpleParser {
       index++;
 
       whereCondition = parseCondition(tokens, index);
-      index += 3;
+      index += CONDITION_TOKEN_COUNT;
     }
 
     if (index < tokens.size()) {
@@ -251,7 +252,7 @@ public class SimpleParser {
     if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "where")) {
       index++;
       whereCondition = parseCondition(tokens, index);
-      index += 3;
+      index += CONDITION_TOKEN_COUNT;
     }
 
     if (index < tokens.size()) {
@@ -278,7 +279,7 @@ public class SimpleParser {
     if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "where")) {
       index++;
       whereCondition = parseCondition(tokens, index);
-      index += 3;
+      index += CONDITION_TOKEN_COUNT;
     }
 
     if (index < tokens.size()) {

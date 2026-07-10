@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -78,8 +79,22 @@ public class Catalog {
   }
 
   public void close() throws IOException {
+    IOException firstException = null;
+
     for (Table table : tables.values()) {
-      table.close();
+      try {
+        table.close();
+      } catch (IOException e) {
+        if (firstException == null) {
+          firstException = e;
+        } else {
+          firstException.addSuppressed(e);
+        }
+      }
+    }
+
+    if (firstException != null) {
+      throw firstException;
     }
   }
 
@@ -115,12 +130,16 @@ public class Catalog {
       Files.createDirectories(baseDir);
     }
 
-    try (BufferedWriter writer = Files.newBufferedWriter(catalogPath, StandardCharsets.UTF_8)) {
+    Path tempPath = baseDir.resolve("catalog.txt.tmp");
+    try (BufferedWriter writer = Files.newBufferedWriter(tempPath, StandardCharsets.UTF_8)) {
       for (Schema schema : schemas.values()) {
         writer.write(toSchemaLine(schema));
         writer.newLine();
       }
     }
+
+    Files.move(
+        tempPath, catalogPath, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
   }
 
   private String toSchemaLine(Schema schema) {
