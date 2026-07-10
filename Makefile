@@ -23,6 +23,8 @@ shell:
 run:
 	docker compose exec dev gradle :$(CHAP):run --console=plain
 
+
+
 # コードの自動整形
 fmt:
 	docker compose exec dev gradle spotlessApply --no-configuration-cache
@@ -35,4 +37,8 @@ check:
 insert:
 	./insert_data.sh $(CHAP)
 
-.PHONY: up down build shell run fmt check insert
+# chapter08 の SQL フローを自動実行する
+insert_chap08:
+	./insert_chap08.sh
+
+.PHONY: up down build shell run fmt check insert insert_chap08

@@ -8,4 +8,4 @@ build/
 bin/ 
 
 # Ignore database storage file
-data
+data/

@@ -1,0 +1,81 @@
+package customdb.chapter08.Operator;
+
+import customdb.chapter08.DB.Row;
+import customdb.chapter08.DB.Schema;
+import customdb.chapter08.DB.Storage;
+import customdb.chapter08.Parser.Statement.Condition;
+import java.io.IOException;
+import java.util.Iterator;
+import java.util.List;
+
+public class IndexScanOperator implements Operator {
+  private final Storage storage;
+  private final Schema schema;
+  private final String tableName;
+  private final Condition condition;
+  private Iterator<Row> iterator;
+
+  public IndexScanOperator(Storage storage, Schema schema, String tableName, Condition condition) {
+    this.storage = storage;
+    this.schema = schema;
+    this.tableName = tableName;
+    this.condition = condition;
+  }
+
+  @Override
+  public void open() throws IOException {
+    Schema.Column column = schema.getColumn(condition.left());
+    Object value = condition.right();
+
+    String columnName = column != null ? column.name() : condition.left();
+
+    if (column != null) {
+      value = parseValue(condition.right(), column);
+    }
+
+    List<Row> rows = storage.searchByIndex(columnName, value);
+    this.iterator = rows.iterator();
+  }
+
+  @Override
+  public Row next() throws IOException {
+    if (iterator != null && iterator.hasNext()) {
+      Row rawRow = iterator.next();
+      return qualifyRow(tableName, schema, rawRow);
+    }
+    return null;
+  }
+
+  @Override
+  public void close() throws IOException {
+    this.iterator = null;
+  }
+
+  private Row qualifyRow(String tableName, Schema schema, Row row) {
+    Row qualified = new Row();
+    for (Schema.Column column : schema.getColumns()) {
+      String columnName = column.name();
+      Object value = row.get(columnName);
+      qualified.put(columnName, value);
+      qualified.put(tableName + "." + columnName, value);
+    }
+    return qualified;
+  }
+
+  private Object parseValue(String rawValue, Schema.Column column) {
+    String value = stripQuote(rawValue);
+    return switch (column.type()) {
+      case INTEGER -> Integer.parseInt(value);
+      case FLOAT -> Float.parseFloat(value);
+      case DOUBLE -> Double.parseDouble(value);
+      case STRING -> value;
+    };
+  }
+
+  private String stripQuote(String value) {
+    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
+      return value.substring(1, value.length() - 1);
+    }
+    return value;
+  }
+}
