@@ -42,37 +42,81 @@ public class Planner {
 
     Operator plan;
 
-    if (condition != null) {
-      Schema.Column column = schema.getColumn(condition.left());
-      if (column != null
-          && column.isIndexed()
-          && column.type() == Schema.DataType.INTEGER
-          && condition.operator().equals("=")) {
-        plan = new IndexScanOperator(table, schema, statement.tableName(), condition);
-      } else {
-        plan = new SeqScanOperator(table, schema, statement.tableName());
-      }
+    if (condition != null && isIndexable(schema, condition)) {
+      plan = new IndexScanOperator(table, schema, statement.tableName(), condition);
     } else {
       plan = new SeqScanOperator(table, schema, statement.tableName());
     }
 
     boolean hasJoin = statement.joinClause() != null;
-    if (hasJoin) {
-      String rightTableName = statement.joinClause().tableName();
-      Table rightTable = catalog.requireTable(rightTableName);
-      Schema rightSchema = catalog.requireSchema(rightTableName);
-      Operator rightScan = new SeqScanOperator(rightTable, rightSchema, rightTableName);
 
-      plan = new NestedLoopJoinOperator(plan, rightScan, statement.joinClause().onCondition());
+    if (!hasJoin) {
+      if (condition != null) {
+        plan = new FilterOperator(plan, condition);
+      }
+      return new ProjectOperator(plan, statement.selectColumns(), false);
     }
 
-    if (condition != null) {
+    String rightTableName = statement.joinClause().tableName();
+    Table rightTable = catalog.requireTable(rightTableName);
+    Schema rightSchema = catalog.requireSchema(rightTableName);
+
+    // WHERE が左テーブルの列だけを見ているなら結合する前に絞り込む
+    boolean pushDown =
+        condition != null
+            && canPushDownToLeft(
+                condition, schema, statement.tableName(), rightSchema, rightTableName);
+
+    if (pushDown) {
       plan = new FilterOperator(plan, condition);
     }
 
-    plan = new ProjectOperator(plan, statement.selectColumns(), hasJoin);
+    Operator rightScan = new SeqScanOperator(rightTable, rightSchema, rightTableName);
+    plan = new NestedLoopJoinOperator(plan, rightScan, statement.joinClause().onCondition());
 
-    return plan;
+    // 右テーブルの列を参照する条件は結合後にしか評価できない
+    if (condition != null && !pushDown) {
+      plan = new FilterOperator(plan, condition);
+    }
+
+    return new ProjectOperator(plan, statement.selectColumns(), true);
+  }
+
+  private boolean isIndexable(Schema schema, Statement.Condition condition) {
+    Schema.Column column = schema.getColumn(condition.left());
+    return column != null
+        && column.isIndexed()
+        && column.type() == Schema.DataType.INTEGER
+        && condition.operator().equals("=");
+  }
+
+  // 条件の両辺が左テーブルの列またはリテラルだけで構成されていれば、結合前に評価できる
+  private boolean canPushDownToLeft(
+      Statement.Condition condition,
+      Schema leftSchema,
+      String leftTableName,
+      Schema rightSchema,
+      String rightTableName) {
+    boolean leftOperandIsLeftColumn =
+        isColumnOf(condition.left(), leftSchema, leftTableName)
+            && !isColumnOf(condition.left(), rightSchema, rightTableName);
+
+    boolean rightOperandIsJoinable = !isColumnOf(condition.right(), rightSchema, rightTableName);
+
+    return leftOperandIsLeftColumn && rightOperandIsJoinable;
+  }
+
+  // トークンが指定したテーブルの列を指しているか
+  private boolean isColumnOf(String token, Schema schema, String tableName) {
+    int dot = token.indexOf('.');
+
+    if (dot >= 0) {
+      String qualifier = token.substring(0, dot);
+      String columnName = token.substring(dot + 1);
+      return qualifier.equalsIgnoreCase(tableName) && schema.getColumn(columnName) != null;
+    }
+
+    return schema.getColumn(token) != null;
   }
 
   private Operator createInsertPlan(Statement.Insert statement) {
