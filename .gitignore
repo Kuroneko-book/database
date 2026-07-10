@@ -2,7 +2,10 @@
 .gradle
 
 # Ignore Gradle build output directory
-build
+build/
+
+# Ignore Gradle bin output directory
+bin/ 
 
 # Ignore database storage file
 data
