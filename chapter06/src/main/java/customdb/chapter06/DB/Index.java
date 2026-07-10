@@ -81,7 +81,6 @@ public class Index {
         }
 
         if (i >= 0 && node.keys[i] == key) {
-          // 既存キーに追加
           if (node.values[i] == null) node.values[i] = new ArrayList<>();
           node.values[i].add(row);
         } else {
@@ -131,6 +130,181 @@ public class Index {
       parent.keys[i] = fullChild.keys[t - 1];
       parent.values[i] = fullChild.values[t - 1];
       parent.numKeys++;
+    }
+
+    public void delete(int key) {
+      if (root == null) return;
+
+      delete(root, key);
+      if (root.numKeys == 0) {
+        if (root.isLeaf) {
+          root = null;
+        } else {
+          root = root.children[0];
+        }
+      }
+    }
+
+    private void delete(BTreeNode node, int key) {
+      int idx = findKey(node, key);
+
+      if (idx < node.numKeys && node.keys[idx] == key) {
+        if (node.isLeaf) {
+          removeFromLeaf(node, idx);
+        } else {
+          removeFromNonLeaf(node, idx);
+        }
+      } else {
+        if (node.isLeaf) return;
+
+        boolean flag = (idx == node.numKeys);
+        if (node.children[idx].numKeys < t) {
+          fill(node, idx);
+        }
+
+        if (flag && idx > node.numKeys) {
+          delete(node.children[idx - 1], key);
+        } else {
+          delete(node.children[idx], key);
+        }
+      }
+    }
+
+    private int findKey(BTreeNode node, int key) {
+      int idx = 0;
+      while (idx < node.numKeys && node.keys[idx] < key) {
+        idx++;
+      }
+      return idx;
+    }
+
+    private void removeFromLeaf(BTreeNode node, int idx) {
+      for (int i = idx + 1; i < node.numKeys; i++) {
+        node.keys[i - 1] = node.keys[i];
+        node.values[i - 1] = node.values[i];
+      }
+      node.numKeys--;
+    }
+
+    private void removeFromNonLeaf(BTreeNode node, int idx) {
+      int key = node.keys[idx];
+
+      if (node.children[idx].numKeys >= t) {
+        BTreeNode predNode = node.children[idx];
+        while (!predNode.isLeaf) {
+          predNode = predNode.children[predNode.numKeys];
+        }
+        node.keys[idx] = predNode.keys[predNode.numKeys - 1];
+        node.values[idx] = predNode.values[predNode.numKeys - 1];
+        delete(node.children[idx], node.keys[idx]);
+      } else if (node.children[idx + 1].numKeys >= t) {
+        BTreeNode succNode = node.children[idx + 1];
+        while (!succNode.isLeaf) {
+          succNode = succNode.children[0];
+        }
+        node.keys[idx] = succNode.keys[0];
+        node.values[idx] = succNode.values[0];
+        delete(node.children[idx + 1], node.keys[idx]);
+      } else {
+        merge(node, idx);
+        delete(node.children[idx], key);
+      }
+    }
+
+    private void fill(BTreeNode node, int idx) {
+      if (idx != 0 && node.children[idx - 1].numKeys >= t) {
+        borrowFromPrev(node, idx);
+      } else if (idx != node.numKeys && node.children[idx + 1].numKeys >= t) {
+        borrowFromNext(node, idx);
+      } else {
+        if (idx != node.numKeys) {
+          merge(node, idx);
+        } else {
+          merge(node, idx - 1);
+        }
+      }
+    }
+
+    private void borrowFromPrev(BTreeNode node, int idx) {
+      BTreeNode child = node.children[idx];
+      BTreeNode sibling = node.children[idx - 1];
+
+      for (int i = child.numKeys - 1; i >= 0; i--) {
+        child.keys[i + 1] = child.keys[i];
+        child.values[i + 1] = child.values[i];
+      }
+      if (!child.isLeaf) {
+        for (int i = child.numKeys; i >= 0; i--) {
+          child.children[i + 1] = child.children[i];
+        }
+      }
+
+      child.keys[0] = node.keys[idx - 1];
+      child.values[0] = node.values[idx - 1];
+      if (!child.isLeaf) {
+        child.children[0] = sibling.children[sibling.numKeys];
+      }
+
+      node.keys[idx - 1] = sibling.keys[sibling.numKeys - 1];
+      node.values[idx - 1] = sibling.values[sibling.numKeys - 1];
+      child.numKeys++;
+      sibling.numKeys--;
+    }
+
+    private void borrowFromNext(BTreeNode node, int idx) {
+      BTreeNode child = node.children[idx];
+      BTreeNode sibling = node.children[idx + 1];
+
+      child.keys[child.numKeys] = node.keys[idx];
+      child.values[child.numKeys] = node.values[idx];
+      if (!child.isLeaf) {
+        child.children[child.numKeys + 1] = sibling.children[0];
+      }
+
+      node.keys[idx] = sibling.keys[0];
+      node.values[idx] = sibling.values[0];
+
+      for (int i = 1; i < sibling.numKeys; i++) {
+        sibling.keys[i - 1] = sibling.keys[i];
+        sibling.values[i - 1] = sibling.values[i];
+      }
+      if (!sibling.isLeaf) {
+        for (int i = 1; i <= sibling.numKeys; i++) {
+          sibling.children[i - 1] = sibling.children[i];
+        }
+      }
+
+      child.numKeys++;
+      sibling.numKeys--;
+    }
+
+    private void merge(BTreeNode node, int idx) {
+      BTreeNode child = node.children[idx];
+      BTreeNode sibling = node.children[idx + 1];
+
+      child.keys[t - 1] = node.keys[idx];
+      child.values[t - 1] = node.values[idx];
+
+      for (int i = 0; i < sibling.numKeys; i++) {
+        child.keys[i + t] = sibling.keys[i];
+        child.values[i + t] = sibling.values[i];
+      }
+      if (!child.isLeaf) {
+        for (int i = 0; i <= sibling.numKeys; i++) {
+          child.children[i + t] = sibling.children[i];
+        }
+      }
+
+      for (int i = idx + 1; i < node.numKeys; i++) {
+        node.keys[i - 1] = node.keys[i];
+        node.values[i - 1] = node.values[i];
+      }
+      for (int i = idx + 2; i <= node.numKeys; i++) {
+        node.children[i - 1] = node.children[i];
+      }
+
+      child.numKeys += sibling.numKeys + 1;
+      node.numKeys--;
     }
   }
 
@@ -193,6 +367,9 @@ public class Index {
 
     if (!rows.isEmpty()) {
       rows.remove(row);
+      if (rows.isEmpty()) {
+        btree.delete(key);
+      }
     }
   }
 }

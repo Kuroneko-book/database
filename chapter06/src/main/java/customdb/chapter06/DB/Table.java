@@ -166,6 +166,8 @@ public class Table {
 
     for (Map.Entry<String, Index> e : indexes.entrySet()) {
       String col = e.getKey();
+      Index idx = e.getValue();
+      idx.remove(row.get(col), row);
       e.getValue().remove(oldRow.get(col), oldRow);
     }
 
@@ -186,6 +188,9 @@ public class Table {
     for (Map.Entry<String, Index> e : indexes.entrySet()) {
       String col = e.getKey();
       e.getValue().add(row.get(col), row);
+
+      Index idx = e.getValue();
+      idx.add(row.get(col), row);
     }
   }
 
@@ -209,6 +214,8 @@ public class Table {
 
     for (Map.Entry<String, Index> e : indexes.entrySet()) {
       String col = e.getKey();
+      Index idx = e.getValue();
+      idx.remove(row.get(col), row);
       e.getValue().remove(row.get(col), row);
     }
 
