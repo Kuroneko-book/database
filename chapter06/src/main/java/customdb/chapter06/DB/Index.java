@@ -312,7 +312,7 @@ public class Index {
 
   public Index() {
     // 適当な最小次数を選択
-    this.btree = new BTree(4);
+    this.btree = new BTree(10);
   }
 
   public void add(Object keyObj, Row row) {
