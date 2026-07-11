@@ -5,6 +5,5 @@ include 'chapter02'
 include 'chapter03'
 include 'chapter04'
 include 'chapter05'
-include 'chapter06'
 include 'chapter07'
 // 新しい章ができたらここに加えていく
