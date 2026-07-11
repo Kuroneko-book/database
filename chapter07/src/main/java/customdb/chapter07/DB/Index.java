@@ -271,7 +271,7 @@ public class Index {
   private final BTree btree;
 
   public Index() {
-    this.btree = new BTree(4);
+    this.btree = new BTree(10);
   }
 
   private Integer normalizeKey(Object keyObj) {
