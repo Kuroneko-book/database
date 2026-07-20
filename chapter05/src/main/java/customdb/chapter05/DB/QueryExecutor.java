@@ -57,13 +57,39 @@ public class QueryExecutor {
     Schema leftSchema = catalog.requireSchema(statement.tableName());
 
     List<Row> rows = new ArrayList<>();
+    boolean usedIndex = false;
+    Statement.Condition condition = statement.whereCondition();
 
-    for (Row row : leftTable.scan()) {
-      if (statement.joinClause() == null) {
-        rows.add(row);
-        continue;
+    if (condition != null && condition.operator().equals("=")) {
+      String colName = condition.left();
+      if (colName.contains(".")) {
+        colName = colName.substring(colName.lastIndexOf('.') + 1);
       }
-      rows.add(qualifyRow(statement.tableName(), leftSchema, row));
+      Schema.Column col = leftSchema.getColumn(colName);
+      if (col != null && col.isIndexed() && leftTable.hasIndex(col.name())) {
+        Object rawVal = resolveColumnOrLiteral(new Row(), condition.right());
+        Object searchVal = parseValue(rawVal.toString(), col);
+        List<Row> indexResults = leftTable.searchByIndex(col.name(), searchVal);
+
+        for (Row row : indexResults) {
+          if (statement.joinClause() == null) {
+            rows.add(row);
+          } else {
+            rows.add(qualifyRow(statement.tableName(), leftSchema, row));
+          }
+        }
+        usedIndex = true;
+      }
+    }
+
+    if (!usedIndex) {
+      for (Row row : leftTable.scan()) {
+        if (statement.joinClause() == null) {
+          rows.add(row);
+        } else {
+          rows.add(qualifyRow(statement.tableName(), leftSchema, row));
+        }
+      }
     }
 
     // JOIN句がある場合は、左側のテーブルの行に対して右側のテーブルを結合する

@@ -8,23 +8,22 @@ echo "10000件のデータを生成中..."
 # データ格納用のディレクトリをきれいにクリーンアップする（SQLベースの章の場合）
 if [[ "$CHAP" == "chapter05" || "$CHAP" == "chapter06" || "$CHAP" == "chapter07" ]]; then
     echo "古いデータベースファイルを削除しています..."
-    rm -f data/catalog.txt data/users.tbl data/catalog.txt.tmp
+    rm -f "$CHAP/data/catalog.txt" "$CHAP/data/users.tbl" "$CHAP/data/catalog.txt.tmp"
 fi
 
 # 一時ファイルを作成
 DATA_FILE="data.txt"
 > "$DATA_FILE"
 
-if [[ "$CHAP" == "chapter05" ]]; then
-    # chapter05: インデックスなしの SQL
-    echo "CREATE TABLE users (id INT, name VARCHAR(50));" >> "$DATA_FILE"
-    for i in $(seq 1 10000)
-    do
-        echo "INSERT INTO users (id, name) VALUES ($i, 'user$i');" >> "$DATA_FILE"
-    done
-elif [[ "$CHAP" == "chapter06" || "$CHAP" == "chapter07" ]]; then
-    # chapter06, chapter07: インデックスありの SQL
-    echo "CREATE TABLE users (id INT INDEX, name VARCHAR(50));" >> "$DATA_FILE"
+if [[ "$CHAP" == "chapter05" || "$CHAP" == "chapter06" || "$CHAP" == "chapter07" ]]; then
+    if [[ "$CHAP" == "chapter05" ]]; then
+        # chapter05: インデックスなしの SQL (idは内部で自動的にインデックスが貼られます)
+        echo "CREATE TABLE users (id INT, name VARCHAR(50));" >> "$DATA_FILE"
+    else
+        # chapter06, chapter07: インデックスありの SQL
+        echo "CREATE TABLE users (id INT INDEX, name VARCHAR(50));" >> "$DATA_FILE"
+    fi
+
     for i in $(seq 1 10000)
     do
         echo "INSERT INTO users (id, name) VALUES ($i, 'user$i');" >> "$DATA_FILE"
