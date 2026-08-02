@@ -44,6 +44,63 @@ public class Index {
       return root == null ? List.of() : search(root, key);
     }
 
+    private BTreeNode findLeafNode(BTreeNode node, int key) {
+      if (node == null) return null;
+      if (node.isLeaf) return node;
+      int idx = findKey(node, key);
+      return findLeafNode(node.children[idx], key);
+    }
+
+    private BTreeNode getLeftmostLeaf(BTreeNode node) {
+      if (node == null) return null;
+      while (!node.isLeaf) {
+        node = node.children[0];
+      }
+      return node;
+    }
+
+    public List<Row> searchRange(int key, String op) {
+      List<Row> results = new ArrayList<>();
+      if (root == null) return results;
+
+      switch (op) {
+        case "=" -> {
+          return search(key);
+        }
+        case ">=", ">" -> {
+          BTreeNode node = findLeafNode(root, key);
+          while (node != null) {
+            for (int i = 0; i < node.numKeys; i++) {
+              int k = node.keys[i];
+              if ((op.equals(">=") && k >= key) || (op.equals(">") && k > key)) {
+                if (node.values[i] != null) {
+                  results.addAll(node.values[i]);
+                }
+              }
+            }
+            node = node.next;
+          }
+        }
+        case "<=", "<" -> {
+          BTreeNode node = getLeftmostLeaf(root);
+          while (node != null) {
+            for (int i = 0; i < node.numKeys; i++) {
+              int k = node.keys[i];
+              if ((op.equals("<=") && k <= key) || (op.equals("<") && k < key)) {
+                if (node.values[i] != null) {
+                  results.addAll(node.values[i]);
+                }
+              } else if ((op.equals("<=") && k > key) || (op.equals("<") && k >= key)) {
+                return results;
+              }
+            }
+            node = node.next;
+          }
+        }
+      }
+      return results;
+    }
+
     private List<Row> search(BTreeNode node, int key) {
       int idx = findKey(node, key);
       if (node.isLeaf) {
@@ -385,6 +442,21 @@ public class Index {
       }
     }
     return bplusTree.search(key);
+  }
+
+  public List<Row> searchRange(Object keyObj, String op) {
+    if (keyObj == null) return List.of();
+    int key;
+    if (keyObj instanceof Number number) {
+      key = number.intValue();
+    } else {
+      try {
+        key = Integer.parseInt(keyObj.toString());
+      } catch (NumberFormatException e) {
+        return List.of();
+      }
+    }
+    return bplusTree.searchRange(key, op);
   }
 
   public void remove(Object keyObj, Row row) {
