@@ -5,7 +5,6 @@ import customdb.chapter06.Parser.Statement;
 import customdb.chapter06.Plan.IndexScanPlan;
 import customdb.chapter06.Plan.Plan;
 import customdb.chapter06.Plan.SeqScanPlan;
-
 import java.util.Set;
 
 // AST を実行計画へ変換する
