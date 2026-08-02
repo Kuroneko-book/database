@@ -5,9 +5,12 @@ import customdb.chapter06.Parser.Statement;
 import customdb.chapter06.Plan.IndexScanPlan;
 import customdb.chapter06.Plan.Plan;
 import customdb.chapter06.Plan.SeqScanPlan;
+import java.util.Set;
 
 // AST を実行計画へ変換する
 public class Planner {
+
+  private static final Set<String> INDEX_OPERATORS = Set.of("=", ">", ">=", "<", "<=");
 
   public Plan createPlan(Statement.Select statement, Schema schema) {
     Statement.Condition condition = statement.whereCondition();
@@ -22,7 +25,7 @@ public class Planner {
     if (column != null
         && column.isIndexed()
         && column.type() == Schema.DataType.INTEGER
-        && condition.operator().equals("=")) {
+        && INDEX_OPERATORS.contains(condition.operator())) {
       return new IndexScanPlan(statement.tableName(), condition);
     }
 

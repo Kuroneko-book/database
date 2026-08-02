@@ -3,32 +3,39 @@ package customdb.chapter06.DB;
 import java.util.ArrayList;
 import java.util.List;
 
-// シンプルに chapter04 の BTree を軽量に移植した実装を内部に持つ
+// B+ Tree implementation for indexing
 public class Index {
 
-  // B-Tree ノード（Chapter04 から簡略化移植）
   static class BTreeNode {
-    int[] keys;
-    List<Row>[] values; // 各キーに対する複数行
-    BTreeNode[] children;
-    int numKeys;
     boolean isLeaf;
+    int numKeys;
+    int[] keys;
+
+    // leaf node fields
+    List<Row>[] values; // only used in leaf nodes
+    BTreeNode next; // pointer to the next leaf node (for range scans)
+
+    // internal node fields
+    BTreeNode[] children; // only used in internal nodes
 
     @SuppressWarnings("unchecked")
     BTreeNode(int t, boolean isLeaf) {
       this.isLeaf = isLeaf;
       this.keys = new int[2 * t - 1];
-      this.values = (List<Row>[]) new List[2 * t - 1];
-      this.children = new BTreeNode[2 * t];
+      if (isLeaf) {
+        this.values = (List<Row>[]) new List[2 * t - 1];
+      } else {
+        this.children = new BTreeNode[2 * t];
+      }
       this.numKeys = 0;
     }
   }
 
-  static class BTree {
+  static class BPlusTree {
     BTreeNode root;
     int t;
 
-    BTree(int t) {
+    BPlusTree(int t) {
       this.root = null;
       this.t = t;
     }
@@ -37,15 +44,87 @@ public class Index {
       return root == null ? List.of() : search(root, key);
     }
 
-    private List<Row> search(BTreeNode node, int key) {
-      int i = 0;
-      while (i < node.numKeys && key > node.keys[i]) i++;
+    private BTreeNode findLeafNode(BTreeNode node, int key) {
+      if (node == null) return null;
+      if (node.isLeaf) return node;
+      int idx = findKey(node, key);
+      return findLeafNode(node.children[idx], key);
+    }
 
-      if (i < node.numKeys && key == node.keys[i]) {
-        return node.values[i] == null ? List.of() : node.values[i];
+    private BTreeNode getLeftmostLeaf(BTreeNode node) {
+      if (node == null) return null;
+      while (!node.isLeaf) {
+        node = node.children[0];
       }
-      if (node.isLeaf) return List.of();
-      return search(node.children[i], key);
+      return node;
+    }
+
+    public List<Row> searchRange(int key, String op) {
+      List<Row> results = new ArrayList<>();
+      if (root == null) return results;
+
+      switch (op) {
+        case "=" -> {
+          return search(key);
+        }
+        case ">=", ">" -> {
+          BTreeNode node = findLeafNode(root, key);
+          while (node != null) {
+            for (int i = 0; i < node.numKeys; i++) {
+              int k = node.keys[i];
+              if ((op.equals(">=") && k >= key) || (op.equals(">") && k > key)) {
+                if (node.values[i] != null) {
+                  results.addAll(node.values[i]);
+                }
+              }
+            }
+            node = node.next;
+          }
+        }
+        case "<=", "<" -> {
+          BTreeNode node = getLeftmostLeaf(root);
+          while (node != null) {
+            for (int i = 0; i < node.numKeys; i++) {
+              int k = node.keys[i];
+              if ((op.equals("<=") && k <= key) || (op.equals("<") && k < key)) {
+                if (node.values[i] != null) {
+                  results.addAll(node.values[i]);
+                }
+              } else if ((op.equals("<=") && k > key) || (op.equals("<") && k >= key)) {
+                return results;
+              }
+            }
+            node = node.next;
+          }
+        }
+      }
+      return results;
+    }
+
+    private List<Row> search(BTreeNode node, int key) {
+      int idx = findKey(node, key);
+      if (node.isLeaf) {
+        if (idx < node.numKeys && key == node.keys[idx]) {
+          return node.values[idx] == null ? List.of() : node.values[idx];
+        }
+        return List.of();
+      } else {
+        return search(node.children[idx], key);
+      }
+    }
+
+    private int findKey(BTreeNode node, int key) {
+      int idx = 0;
+      if (node.isLeaf) {
+        while (idx < node.numKeys && key > node.keys[idx]) {
+          idx++;
+        }
+      } else {
+        while (idx < node.numKeys && key >= node.keys[idx]) {
+          idx++;
+        }
+      }
+      return idx;
     }
 
     public void insert(int key, Row row) {
@@ -62,7 +141,7 @@ public class Index {
           s.children[0] = root;
           splitChild(s, 0, root);
 
-          int i = (s.keys[0] < key) ? 1 : 0;
+          int i = (s.keys[0] <= key) ? 1 : 0;
           insertNonFull(s.children[i], key, row);
           root = s;
         } else {
@@ -81,7 +160,9 @@ public class Index {
         }
 
         if (i >= 0 && node.keys[i] == key) {
-          if (node.values[i] == null) node.values[i] = new ArrayList<>();
+          if (node.values[i] == null) {
+            node.values[i] = new ArrayList<>();
+          }
           node.values[i].add(row);
         } else {
           node.keys[i + 1] = key;
@@ -91,45 +172,67 @@ public class Index {
           node.numKeys++;
         }
       } else {
-        while (i >= 0 && node.keys[i] > key) i--;
+        while (i >= 0 && node.keys[i] > key) {
+          i--;
+        }
         i++;
         if (node.children[i].numKeys == 2 * t - 1) {
           splitChild(node, i, node.children[i]);
-          if (node.keys[i] < key) i++;
+          if (node.keys[i] <= key) {
+            i++;
+          }
         }
         insertNonFull(node.children[i], key, row);
       }
     }
 
-    private void splitChild(BTreeNode parent, int i, BTreeNode fullChild) {
-      BTreeNode newNode = new BTreeNode(t, fullChild.isLeaf);
-      newNode.numKeys = t - 1;
+    private void splitChild(BTreeNode parent, int i, BTreeNode child) {
+      BTreeNode newNode = new BTreeNode(t, child.isLeaf);
 
-      for (int j = 0; j < t - 1; j++) {
-        newNode.keys[j] = fullChild.keys[j + t];
-        newNode.values[j] = fullChild.values[j + t];
-      }
-
-      if (!fullChild.isLeaf) {
+      if (child.isLeaf) {
+        newNode.numKeys = t;
         for (int j = 0; j < t; j++) {
-          newNode.children[j] = fullChild.children[j + t];
+          newNode.keys[j] = child.keys[j + t - 1];
+          newNode.values[j] = child.values[j + t - 1];
+          child.values[j + t - 1] = null;
         }
-      }
-      fullChild.numKeys = t - 1;
+        child.numKeys = t - 1;
 
-      for (int j = parent.numKeys; j >= i + 1; j--) {
-        parent.children[j + 1] = parent.children[j];
-      }
-      parent.children[i + 1] = newNode;
+        newNode.next = child.next;
+        child.next = newNode;
 
-      for (int j = parent.numKeys - 1; j >= i; j--) {
-        parent.keys[j + 1] = parent.keys[j];
-        parent.values[j + 1] = parent.values[j];
-      }
+        for (int j = parent.numKeys; j >= i + 1; j--) {
+          parent.children[j + 1] = parent.children[j];
+        }
+        parent.children[i + 1] = newNode;
 
-      parent.keys[i] = fullChild.keys[t - 1];
-      parent.values[i] = fullChild.values[t - 1];
-      parent.numKeys++;
+        for (int j = parent.numKeys - 1; j >= i; j--) {
+          parent.keys[j + 1] = parent.keys[j];
+        }
+        parent.keys[i] = newNode.keys[0];
+        parent.numKeys++;
+      } else {
+        newNode.numKeys = t - 1;
+        for (int j = 0; j < t - 1; j++) {
+          newNode.keys[j] = child.keys[j + t];
+        }
+        for (int j = 0; j < t; j++) {
+          newNode.children[j] = child.children[j + t];
+          child.children[j + t] = null;
+        }
+        child.numKeys = t - 1;
+
+        for (int j = parent.numKeys; j >= i + 1; j--) {
+          parent.children[j + 1] = parent.children[j];
+        }
+        parent.children[i + 1] = newNode;
+
+        for (int j = parent.numKeys - 1; j >= i; j--) {
+          parent.keys[j + 1] = parent.keys[j];
+        }
+        parent.keys[i] = child.keys[t - 1];
+        parent.numKeys++;
+      }
     }
 
     public void delete(int key) {
@@ -148,34 +251,17 @@ public class Index {
     private void delete(BTreeNode node, int key) {
       int idx = findKey(node, key);
 
-      if (idx < node.numKeys && node.keys[idx] == key) {
-        if (node.isLeaf) {
+      if (node.isLeaf) {
+        if (idx < node.numKeys && node.keys[idx] == key) {
           removeFromLeaf(node, idx);
-        } else {
-          removeFromNonLeaf(node, idx);
         }
       } else {
-        if (node.isLeaf) return;
-
-        boolean flag = (idx == node.numKeys);
         if (node.children[idx].numKeys < t) {
           fill(node, idx);
+          idx = findKey(node, key);
         }
-
-        if (flag && idx > node.numKeys) {
-          delete(node.children[idx - 1], key);
-        } else {
-          delete(node.children[idx], key);
-        }
+        delete(node.children[idx], key);
       }
-    }
-
-    private int findKey(BTreeNode node, int key) {
-      int idx = 0;
-      while (idx < node.numKeys && node.keys[idx] < key) {
-        idx++;
-      }
-      return idx;
     }
 
     private void removeFromLeaf(BTreeNode node, int idx) {
@@ -183,32 +269,8 @@ public class Index {
         node.keys[i - 1] = node.keys[i];
         node.values[i - 1] = node.values[i];
       }
+      node.values[node.numKeys - 1] = null;
       node.numKeys--;
-    }
-
-    private void removeFromNonLeaf(BTreeNode node, int idx) {
-      int key = node.keys[idx];
-
-      if (node.children[idx].numKeys >= t) {
-        BTreeNode predNode = node.children[idx];
-        while (!predNode.isLeaf) {
-          predNode = predNode.children[predNode.numKeys];
-        }
-        node.keys[idx] = predNode.keys[predNode.numKeys - 1];
-        node.values[idx] = predNode.values[predNode.numKeys - 1];
-        delete(node.children[idx], node.keys[idx]);
-      } else if (node.children[idx + 1].numKeys >= t) {
-        BTreeNode succNode = node.children[idx + 1];
-        while (!succNode.isLeaf) {
-          succNode = succNode.children[0];
-        }
-        node.keys[idx] = succNode.keys[0];
-        node.values[idx] = succNode.values[0];
-        delete(node.children[idx + 1], node.keys[idx]);
-      } else {
-        merge(node, idx);
-        delete(node.children[idx], key);
-      }
     }
 
     private void fill(BTreeNode node, int idx) {
@@ -229,90 +291,126 @@ public class Index {
       BTreeNode child = node.children[idx];
       BTreeNode sibling = node.children[idx - 1];
 
-      for (int i = child.numKeys - 1; i >= 0; i--) {
-        child.keys[i + 1] = child.keys[i];
-        child.values[i + 1] = child.values[i];
-      }
-      if (!child.isLeaf) {
+      if (child.isLeaf) {
+        for (int i = child.numKeys - 1; i >= 0; i--) {
+          child.keys[i + 1] = child.keys[i];
+          child.values[i + 1] = child.values[i];
+        }
+        child.keys[0] = sibling.keys[sibling.numKeys - 1];
+        child.values[0] = sibling.values[sibling.numKeys - 1];
+        sibling.values[sibling.numKeys - 1] = null;
+
+        child.numKeys++;
+        sibling.numKeys--;
+
+        node.keys[idx - 1] = child.keys[0];
+      } else {
+        for (int i = child.numKeys - 1; i >= 0; i--) {
+          child.keys[i + 1] = child.keys[i];
+        }
         for (int i = child.numKeys; i >= 0; i--) {
           child.children[i + 1] = child.children[i];
         }
-      }
 
-      child.keys[0] = node.keys[idx - 1];
-      child.values[0] = node.values[idx - 1];
-      if (!child.isLeaf) {
+        child.keys[0] = node.keys[idx - 1];
         child.children[0] = sibling.children[sibling.numKeys];
-      }
+        sibling.children[sibling.numKeys] = null;
 
-      node.keys[idx - 1] = sibling.keys[sibling.numKeys - 1];
-      node.values[idx - 1] = sibling.values[sibling.numKeys - 1];
-      child.numKeys++;
-      sibling.numKeys--;
+        node.keys[idx - 1] = sibling.keys[sibling.numKeys - 1];
+
+        child.numKeys++;
+        sibling.numKeys--;
+      }
     }
 
     private void borrowFromNext(BTreeNode node, int idx) {
       BTreeNode child = node.children[idx];
       BTreeNode sibling = node.children[idx + 1];
 
-      child.keys[child.numKeys] = node.keys[idx];
-      child.values[child.numKeys] = node.values[idx];
-      if (!child.isLeaf) {
+      if (child.isLeaf) {
+        child.keys[child.numKeys] = sibling.keys[0];
+        child.values[child.numKeys] = sibling.values[0];
+
+        for (int i = 1; i < sibling.numKeys; i++) {
+          sibling.keys[i - 1] = sibling.keys[i];
+          sibling.values[i - 1] = sibling.values[i];
+        }
+        sibling.values[sibling.numKeys - 1] = null;
+
+        child.numKeys++;
+        sibling.numKeys--;
+
+        node.keys[idx] = sibling.keys[0];
+      } else {
+        child.keys[child.numKeys] = node.keys[idx];
         child.children[child.numKeys + 1] = sibling.children[0];
-      }
 
-      node.keys[idx] = sibling.keys[0];
-      node.values[idx] = sibling.values[0];
+        node.keys[idx] = sibling.keys[0];
 
-      for (int i = 1; i < sibling.numKeys; i++) {
-        sibling.keys[i - 1] = sibling.keys[i];
-        sibling.values[i - 1] = sibling.values[i];
-      }
-      if (!sibling.isLeaf) {
+        for (int i = 1; i < sibling.numKeys; i++) {
+          sibling.keys[i - 1] = sibling.keys[i];
+        }
         for (int i = 1; i <= sibling.numKeys; i++) {
           sibling.children[i - 1] = sibling.children[i];
         }
-      }
+        sibling.children[sibling.numKeys] = null;
 
-      child.numKeys++;
-      sibling.numKeys--;
+        child.numKeys++;
+        sibling.numKeys--;
+      }
     }
 
     private void merge(BTreeNode node, int idx) {
       BTreeNode child = node.children[idx];
       BTreeNode sibling = node.children[idx + 1];
 
-      child.keys[t - 1] = node.keys[idx];
-      child.values[t - 1] = node.values[idx];
+      if (child.isLeaf) {
+        for (int i = 0; i < sibling.numKeys; i++) {
+          child.keys[i + child.numKeys] = sibling.keys[i];
+          child.values[i + child.numKeys] = sibling.values[i];
+          sibling.values[i] = null;
+        }
+        child.next = sibling.next;
+        child.numKeys += sibling.numKeys;
 
-      for (int i = 0; i < sibling.numKeys; i++) {
-        child.keys[i + t] = sibling.keys[i];
-        child.values[i + t] = sibling.values[i];
-      }
-      if (!child.isLeaf) {
+        for (int i = idx + 1; i < node.numKeys; i++) {
+          node.keys[i - 1] = node.keys[i];
+        }
+        for (int i = idx + 2; i <= node.numKeys; i++) {
+          node.children[i - 1] = node.children[i];
+        }
+        node.children[node.numKeys] = null;
+        node.numKeys--;
+      } else {
+        child.keys[t - 1] = node.keys[idx];
+
+        for (int i = 0; i < sibling.numKeys; i++) {
+          child.keys[i + t] = sibling.keys[i];
+        }
         for (int i = 0; i <= sibling.numKeys; i++) {
           child.children[i + t] = sibling.children[i];
+          sibling.children[i] = null;
         }
-      }
 
-      for (int i = idx + 1; i < node.numKeys; i++) {
-        node.keys[i - 1] = node.keys[i];
-        node.values[i - 1] = node.values[i];
-      }
-      for (int i = idx + 2; i <= node.numKeys; i++) {
-        node.children[i - 1] = node.children[i];
-      }
+        child.numKeys += sibling.numKeys + 1;
 
-      child.numKeys += sibling.numKeys + 1;
-      node.numKeys--;
+        for (int i = idx + 1; i < node.numKeys; i++) {
+          node.keys[i - 1] = node.keys[i];
+        }
+        for (int i = idx + 2; i <= node.numKeys; i++) {
+          node.children[i - 1] = node.children[i];
+        }
+        node.children[node.numKeys] = null;
+        node.numKeys--;
+      }
     }
   }
 
-  private final BTree btree;
+  private final BPlusTree bplusTree;
 
   public Index() {
-    // 適当な最小次数を選択
-    this.btree = new BTree(10);
+    // Select an appropriate minimum degree
+    this.bplusTree = new BPlusTree(10);
   }
 
   public void add(Object keyObj, Row row) {
@@ -324,11 +422,11 @@ public class Index {
       try {
         key = Integer.parseInt(keyObj.toString());
       } catch (NumberFormatException e) {
-        return; // 現状は整数キーのみサポート
+        return;
       }
     }
 
-    btree.insert(key, row);
+    bplusTree.insert(key, row);
   }
 
   public List<Row> search(Object keyObj) {
@@ -343,7 +441,22 @@ public class Index {
         return List.of();
       }
     }
-    return btree.search(key);
+    return bplusTree.search(key);
+  }
+
+  public List<Row> searchRange(Object keyObj, String op) {
+    if (keyObj == null) return List.of();
+    int key;
+    if (keyObj instanceof Number number) {
+      key = number.intValue();
+    } else {
+      try {
+        key = Integer.parseInt(keyObj.toString());
+      } catch (NumberFormatException e) {
+        return List.of();
+      }
+    }
+    return bplusTree.searchRange(key, op);
   }
 
   public void remove(Object keyObj, Row row) {
@@ -352,7 +465,6 @@ public class Index {
     }
 
     int key;
-
     if (keyObj instanceof Number number) {
       key = number.intValue();
     } else {
@@ -363,12 +475,11 @@ public class Index {
       }
     }
 
-    List<Row> rows = btree.search(key);
-
+    List<Row> rows = bplusTree.search(key);
     if (!rows.isEmpty()) {
       rows.remove(row);
       if (rows.isEmpty()) {
-        btree.delete(key);
+        bplusTree.delete(key);
       }
     }
   }
