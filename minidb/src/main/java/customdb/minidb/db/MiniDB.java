@@ -1,20 +1,73 @@
 package customdb.minidb.db;
 
 import customdb.minidb.parser.SimpleParser;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Scanner;
 
 public class MiniDB {
+    private static final String DATA_PATH = "data/mini.db";
     private Map<Integer, String> db;
     private Scanner scanner;
     private SimpleParser parser;
+    private Path dataPath;
 
     public MiniDB() {
         db = new HashMap<>();
         scanner = new Scanner(System.in);
         parser = new SimpleParser();
+        dataPath = Path.of(DATA_PATH);
+
+        if (!Files.exists(dataPath.getParent())) {
+            try {
+                Files.createDirectories(dataPath.getParent());
+            } catch (IOException e) {
+                System.out.println("Failed to create data directory.");
+            }
+        } else {
+            loadFromFile();
+        }
         System.out.println("Welcome to minidb!");
+    }
+
+    private void loadFromFile() {
+        List<String> lines;
+        try {
+            lines = Files.readAllLines(dataPath);
+        } catch (IOException e) {
+            System.out.println("Failed to load database.");
+            return;
+        }
+
+        for (String line : lines) {
+            if (line.isBlank()) {
+                continue;
+            }
+            try {
+                String[] parts = line.split(",");
+                db.put(Integer.parseInt(parts[0]), parts[1]);
+            } catch (ArrayIndexOutOfBoundsException e) {
+                System.out.println("Skipped invalid record format: " + line);
+            }
+        }
+
+        System.out.println("Loaded records from file.");
+    }
+
+    private void saveToFile() {
+        try {
+            List<String> lines = db.entrySet()
+                                     .stream()
+                                     .map(entry -> entry.getKey() + "," + entry.getValue())
+                                     .toList();
+            Files.write(dataPath, lines);
+        } catch (IOException e) {
+            System.out.println("Failed to save database.");
+        }
     }
 
     public void insert(String key, String value) {
@@ -27,11 +80,12 @@ public class MiniDB {
         }
 
         if (db.putIfAbsent(id, value) != null) {
-            System.out.println("Key already exists.");
+            System.out.println("Key already exists. Use update command to modify.");
             return;
         }
 
-        System.out.println("Inserted.");
+        saveToFile();
+        System.out.println("Inserted and saved to disk.");
     }
 
     public void select() {
@@ -69,7 +123,8 @@ public class MiniDB {
         }
 
         db.put(id, value);
-        System.out.println("Updated.");
+        saveToFile();
+        System.out.println("Updated and saved to disk.");
     }
 
     public void delete(String key) {
@@ -87,7 +142,8 @@ public class MiniDB {
         }
 
         db.remove(id);
-        System.out.println("Deleted.");
+        saveToFile();
+        System.out.println("Deleted and saved to disk.");
     }
 
     public void start() {
