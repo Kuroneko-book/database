@@ -10,6 +10,18 @@ public class SimpleParser {
     }
 
     public String getCommand(String[] tokens) {
-        return tokens.length > 0 ? tokens[0] : "";
+        if (tokens.length > 0) {
+            return tokens[0];
+        }
+        return "";
+    }
+
+    public Integer parseKey(String key) {
+        try {
+            return Integer.parseInt(key);
+        } catch (NumberFormatException e) {
+            System.out.println("Error: Key must be an integer.");
+            return null;
+        }
     }
 }
