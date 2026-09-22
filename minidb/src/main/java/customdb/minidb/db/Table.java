@@ -9,11 +9,14 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 public class Table implements AutoCloseable {
   private final Schema schema;
   private final PageManager pageManager;
+  private final Map<String, Index> indexes;
 
   public record Record(String key, Row row) {}
 
@@ -24,6 +27,28 @@ public class Table implements AutoCloseable {
 
     this.schema = schema;
     this.pageManager = new PageManager(path.toString());
+    this.indexes = new LinkedHashMap<>();
+
+    try {
+      for (Schema.Column column : schema.getColumns()) {
+        if (column.indexed() && column.type() == Schema.DataType.INTEGER) {
+          indexes.put(column.name(), new Index(schema.getKeyColumn().name()));
+        }
+      }
+
+      if (!indexes.isEmpty()) {
+        for (Record record : scanRecords()) {
+          addToIndexes(record.row());
+        }
+      }
+    } catch (IOException | RuntimeException e) {
+      try {
+        pageManager.close();
+      } catch (IOException closeError) {
+        e.addSuppressed(closeError);
+      }
+      throw e;
+    }
   }
 
   public void insert(Row row) throws IOException {
@@ -31,6 +56,7 @@ public class Table implements AutoCloseable {
     String key = schema.key(row);
 
     pageManager.insertRecord(key, payload);
+    addToIndexes(row);
   }
 
   public List<Row> scan() throws IOException {
@@ -60,11 +86,54 @@ public class Table implements AutoCloseable {
 
   public boolean update(String oldKey, Row row) throws IOException {
     byte[] payload = validatedPayload(row);
-    return pageManager.updateRecordByKey(oldKey, schema.key(row), payload);
+    if (indexes.isEmpty()) {
+      return pageManager.updateRecordByKey(oldKey, schema.key(row), payload);
+    }
+    if (oldKey == null) {
+      throw new IllegalArgumentException("Key cannot be null.");
+    }
+
+    customdb.minidb.storage.Record oldRecord = pageManager.findRecord(oldKey);
+    if (oldRecord == null) {
+      return false;
+    }
+
+    Row oldRow = deserialize(oldRecord.value());
+    boolean updated = pageManager.updateRecordByKey(oldKey, schema.key(row), payload);
+    if (updated) {
+      removeFromIndexes(oldRow);
+      addToIndexes(row);
+    }
+
+    return updated;
   }
 
   public boolean delete(String key) throws IOException {
-    return pageManager.deleteRecordByKey(key);
+    if (indexes.isEmpty()) {
+      return pageManager.deleteRecordByKey(key);
+    }
+
+    customdb.minidb.storage.Record oldRecord = pageManager.findRecord(key);
+    if (oldRecord == null) {
+      return false;
+    }
+
+    Row oldRow = deserialize(oldRecord.value());
+    boolean deleted = pageManager.deleteRecordByKey(key);
+    if (deleted) {
+      removeFromIndexes(oldRow);
+    }
+
+    return deleted;
+  }
+
+  public List<Row> searchByIndex(String column, int value) {
+    Schema.Column schemaColumn = schema.getColumn(column);
+    if (schemaColumn == null || !indexes.containsKey(schemaColumn.name())) {
+      throw new IllegalArgumentException("Column is not indexed: " + column);
+    }
+
+    return indexes.get(schemaColumn.name()).search(value);
   }
 
   public void validate(Row row) {
@@ -87,6 +156,18 @@ public class Table implements AutoCloseable {
 
   public boolean containsKey(String key) throws IOException {
     return pageManager.findRecord(key) != null;
+  }
+
+  private void addToIndexes(Row row) {
+    for (Map.Entry<String, Index> entry : indexes.entrySet()) {
+      entry.getValue().add((Integer) row.get(entry.getKey()), row);
+    }
+  }
+
+  private void removeFromIndexes(Row row) {
+    for (Map.Entry<String, Index> entry : indexes.entrySet()) {
+      entry.getValue().remove((Integer) row.get(entry.getKey()), row);
+    }
   }
 
   private byte[] serialize(Row row) {

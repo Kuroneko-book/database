@@ -149,11 +149,19 @@ public class Schema {
     return name.toLowerCase(Locale.ROOT);
   }
 
-  public record Column(String name, DataType type, int length, boolean primaryKey) {
+  public record Column(
+      String name, DataType type, int length, boolean primaryKey, boolean indexed) {
+    public Column(String name, DataType type, int length, boolean primaryKey) {
+      this(name, type, length, primaryKey, false);
+    }
+
     public Column {
       name = identifier(name);
       if (type == null || (type == DataType.STRING ? length <= 0 : length != 0)) {
         throw new IllegalArgumentException("Invalid type or length for column: " + name);
+      }
+      if (indexed && type != DataType.INTEGER) {
+        throw new IllegalArgumentException("Only INTEGER columns can be indexed: " + name);
       }
     }
   }

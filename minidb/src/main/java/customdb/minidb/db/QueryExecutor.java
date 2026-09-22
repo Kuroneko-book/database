@@ -1,6 +1,8 @@
 package customdb.minidb.db;
 
 import customdb.minidb.parser.Statement;
+import customdb.minidb.plan.Plan;
+import customdb.minidb.planner.Planner;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.nio.file.Path;
@@ -13,9 +15,11 @@ import java.util.Set;
 
 public class QueryExecutor implements AutoCloseable {
   private final Catalog catalog;
+  private final Planner planner;
 
   public QueryExecutor(Path baseDir) throws IOException {
     this.catalog = new Catalog(baseDir);
+    this.planner = new Planner();
   }
 
   public void execute(Statement statement) throws IOException {
@@ -119,6 +123,15 @@ public class QueryExecutor implements AutoCloseable {
       }
     }
 
+    Plan plan =
+        planner.createPlan(
+            leftSchema,
+            where == null ? null : where.left().name(),
+            where == null ? null : where.operator(),
+            where == null ? null : where.literal());
+    System.out.println(plan + " : " + leftSchema.getTableName());
+    List<Row> leftRows = plan.execute(catalog.requireTable(leftSchema.getTableName()));
+
     List<Row> rightRows = new ArrayList<>();
     if (hasJoin) {
       for (Row row : catalog.requireTable(schemas.get(1).getTableName()).scan()) {
@@ -127,7 +140,7 @@ public class QueryExecutor implements AutoCloseable {
     }
 
     boolean found = false;
-    for (Row raw : catalog.requireTable(leftSchema.getTableName()).scan()) {
+    for (Row raw : leftRows) {
       Row left = qualifyRow(leftSchema, raw);
       if (!hasJoin) {
         if (matches(left, where)) {

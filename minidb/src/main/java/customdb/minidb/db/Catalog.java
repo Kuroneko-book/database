@@ -159,7 +159,9 @@ public class Catalog implements AutoCloseable {
               + ":"
               + column.length()
               + ":"
-              + column.primaryKey());
+              + column.primaryKey()
+              + ":"
+              + column.indexed());
     }
 
     return schema.getTableName() + "|" + String.join(",", columnTexts);
@@ -172,7 +174,9 @@ public class Catalog implements AutoCloseable {
     List<Schema.Column> columns = new ArrayList<>();
     for (String columnText : parts[1].split(",", -1)) {
       String[] values = columnText.split(":", -1);
-      if (values.length != 4 || !(values[3].equals("true") || values[3].equals("false"))) {
+      if ((values.length != 4 && values.length != 5)
+          || !(values[3].equals("true") || values[3].equals("false"))
+          || (values.length == 5 && !(values[4].equals("true") || values[4].equals("false")))) {
         throw new IllegalArgumentException("Invalid column entry.");
       }
 
@@ -181,7 +185,8 @@ public class Catalog implements AutoCloseable {
               values[0],
               Schema.DataType.valueOf(values[1]),
               Integer.parseInt(values[2]),
-              Boolean.parseBoolean(values[3])));
+              Boolean.parseBoolean(values[3]),
+              values.length == 5 && Boolean.parseBoolean(values[4])));
     }
 
     return new Schema(parts[0], columns);

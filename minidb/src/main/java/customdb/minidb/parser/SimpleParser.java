@@ -46,6 +46,7 @@ public class SimpleParser {
   private Statement.Select parseSelect(List<String> tokens) {
     int index = 1;
     List<String> columns = new ArrayList<>();
+
     if (index >= tokens.size()) {
       throw new IllegalArgumentException("SELECT columns are missing.");
     }
@@ -56,6 +57,7 @@ public class SimpleParser {
         throw new IllegalArgumentException("Wildcard SELECT cannot include other columns.");
       }
     }
+
     while (index < tokens.size() && !is(tokens.get(index), "from")) {
       if (tokens.get(index).equals(",") || columns.isEmpty() && tokens.get(index).equals(")")) {
         throw new IllegalArgumentException("Invalid SELECT column list.");
@@ -72,6 +74,7 @@ public class SimpleParser {
         }
       }
     }
+
     if (columns.isEmpty()) {
       throw new IllegalArgumentException("SELECT columns are missing.");
     }
@@ -81,6 +84,7 @@ public class SimpleParser {
     String table = table(tokens, index++);
     Statement.JoinClause join = null;
     Statement.Condition where = null;
+
     if (index < tokens.size() && is(tokens.get(index), "join")) {
       index++;
       String joinTable = table(tokens, index++);
@@ -89,6 +93,7 @@ public class SimpleParser {
       index = parsed.nextIndex;
       join = new Statement.JoinClause(joinTable, parsed.value);
     }
+
     if (index < tokens.size() && is(tokens.get(index), "where")) {
       index++;
       ParseCondition parsed = condition(tokens, index);
@@ -106,6 +111,7 @@ public class SimpleParser {
     int index = 3;
     List<String> columns = new ArrayList<>();
     Set<String> seen = new HashSet<>();
+
     if (index < tokens.size() && tokens.get(index).equals("(")) {
       index++;
       if (index >= tokens.size() || tokens.get(index).equals(")")) {
@@ -132,6 +138,7 @@ public class SimpleParser {
         }
       }
     }
+
     require(tokens, index++, "values");
     require(tokens, index++, "(");
     List<String> values = literals(tokens, index);
@@ -143,12 +150,14 @@ public class SimpleParser {
 
   private Statement.Update parseUpdate(List<String> tokens) {
     String table = table(tokens, 1);
+
     require(tokens, 2, "set");
     String column = column(tokens, 3);
     require(tokens, 4, "=");
     String value = literal(tokens, 5);
     int index = 6;
     Statement.Condition where = null;
+
     if (index < tokens.size() && is(tokens.get(index), "where")) {
       ParseCondition parsed = condition(tokens, index + 1);
       index = parsed.nextIndex;
@@ -164,6 +173,7 @@ public class SimpleParser {
     String table = table(tokens, 2);
     int index = 3;
     Statement.Condition where = null;
+
     if (index < tokens.size() && is(tokens.get(index), "where")) {
       ParseCondition parsed = condition(tokens, index + 1);
       index = parsed.nextIndex;
@@ -177,17 +187,20 @@ public class SimpleParser {
   private Statement.CreateTable parseCreateTable(List<String> tokens) {
     require(tokens, 1, "table");
     String table = table(tokens, 2);
+
     require(tokens, 3, "(");
     int index = 4;
     List<Schema.Column> columns = new ArrayList<>();
     if (index >= tokens.size() || tokens.get(index).equals(")")) {
       throw new IllegalArgumentException("CREATE TABLE requires columns.");
     }
+
     while (true) {
       String name = bareColumn(token(tokens, index++));
       String typeName = word(token(tokens, index++));
       Schema.DataType type;
       int length = 0;
+
       if (typeName.equals("int") || typeName.equals("integer")) {
         type = Schema.DataType.INTEGER;
       } else if (typeName.equals("float")) {
@@ -210,13 +223,30 @@ public class SimpleParser {
       } else {
         throw new IllegalArgumentException("Unsupported data type: " + typeName);
       }
+
       boolean primaryKey = false;
-      if (index < tokens.size() && is(tokens.get(index), "primary")) {
-        primaryKey = true;
-        index++;
-        require(tokens, index++, "key");
+      boolean indexed = false;
+
+      while (index < tokens.size()
+          && (is(tokens.get(index), "primary") || is(tokens.get(index), "index"))) {
+        if (is(tokens.get(index), "primary")) {
+          if (primaryKey) {
+            throw new IllegalArgumentException("PRIMARY KEY is repeated: " + name);
+          }
+          primaryKey = true;
+          index++;
+          require(tokens, index++, "key");
+        } else {
+          if (indexed) {
+            throw new IllegalArgumentException("INDEX is repeated: " + name);
+          }
+          indexed = true;
+          index++;
+        }
       }
-      columns.add(new Schema.Column(name, type, length, primaryKey));
+
+      columns.add(new Schema.Column(name, type, length, primaryKey, indexed));
+
       if (index >= tokens.size()) {
         throw new IllegalArgumentException("CREATE TABLE is not closed.");
       }
@@ -239,20 +269,24 @@ public class SimpleParser {
 
   private ParseCondition condition(List<String> tokens, int index) {
     String left = column(tokens, index++);
+
     if (index >= tokens.size() || !operator(tokens.get(index))) {
       throw new IllegalArgumentException("Condition operator is missing.");
     }
     String op = tokens.get(index++);
     String rightToken = token(tokens, index++);
     String right = validColumn(rightToken) ? column(rightToken) : literal(rightToken);
+
     return new ParseCondition(new Statement.Condition(left, op, right), index);
   }
 
   private List<String> literals(List<String> tokens, int index) {
     List<String> values = new ArrayList<>();
+
     if (index >= tokens.size() || tokens.get(index).equals(")")) {
       throw new IllegalArgumentException("Value list is empty.");
     }
+
     while (true) {
       values.add(literal(tokens.get(index++)));
       if (index >= tokens.size()) {
