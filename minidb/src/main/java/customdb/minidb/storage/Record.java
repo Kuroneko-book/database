@@ -3,12 +3,11 @@ package customdb.minidb.storage;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
-public record Record(String key, String value) {
+public record Record(String key, byte[] value) {
   // メモリ上の Record オブジェクトを、ディスクに保存可能なバイト配列（byte[]）に変換する
-  // <p>フォーマット: [キー長(2B)] + [キー(UTF-8)] + [値長(2B)] + [値(UTF-8)]
   public byte[] serialize() {
     byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-    byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
+    byte[] valBytes = value;
 
     byte[] bytes = new byte[2 + keyBytes.length + 2 + valBytes.length];
     ByteBuffer buffer = ByteBuffer.wrap(bytes);
@@ -30,15 +29,13 @@ public record Record(String key, String value) {
     int valLen = Short.toUnsignedInt(buffer.getShort());
     byte[] valBytes = new byte[valLen];
     buffer.get(valBytes);
-    String value = new String(valBytes, StandardCharsets.UTF_8);
-
-    return new Record(key, value);
+    return new Record(key, valBytes);
   }
 
   // 指定したレコードをシリアライズした際の総バイト数を返す
   public int getSerializedSize() {
     byte[] keyBytes = key.getBytes(StandardCharsets.UTF_8);
-    byte[] valBytes = value.getBytes(StandardCharsets.UTF_8);
+    byte[] valBytes = value;
     return 2 + keyBytes.length + 2 + valBytes.length;
   }
 }

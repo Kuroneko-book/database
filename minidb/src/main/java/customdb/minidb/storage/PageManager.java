@@ -132,11 +132,15 @@ public class PageManager implements AutoCloseable {
     return true;
   }
 
-  public boolean updateRecordByKey(String key, String newValue) throws IOException {
-    if (key == null || newValue == null) {
+  public boolean updateRecordByKey(String key, byte[] newValue) throws IOException {
+    return updateRecordByKey(key, key, newValue);
+  }
+
+  public boolean updateRecordByKey(String key, String newKey, byte[] newValue) throws IOException {
+    if (key == null || newKey == null || newValue == null) {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }
-    Record newRecord = new Record(key, newValue);
+    Record newRecord = new Record(newKey, newValue);
     int requiredSpace = newRecord.getSerializedSize();
     if (requiredSpace > Page.MAX_RECORD_SIZE) {
       throw new IllegalArgumentException(
@@ -147,11 +151,15 @@ public class PageManager implements AutoCloseable {
     if (oldId == null) {
       return false;
     }
+    if (!key.equals(newKey) && index.search(newKey) != null) {
+      throw new IllegalArgumentException("Key already exists: " + newKey);
+    }
     Page oldPage = readIndexedPage(key, oldId);
     int newLpIndex = oldPage.updateRecord(oldId.slotIndex(), newRecord);
     if (newLpIndex != -1) {
       writePage(oldId.pageIndex(), oldPage);
-      index.insert(key, new TupleId(oldId.pageIndex(), newLpIndex));
+      if (!key.equals(newKey)) index.delete(key);
+      index.insert(newKey, new TupleId(oldId.pageIndex(), newLpIndex));
       return true;
     }
 
@@ -169,11 +177,12 @@ public class PageManager implements AutoCloseable {
       }
       throw e;
     }
-    index.insert(key, newId);
+    if (!key.equals(newKey)) index.delete(key);
+    index.insert(newKey, newId);
     return true;
   }
 
-  public TupleId insertRecord(String key, String value) throws IOException {
+  public TupleId insertRecord(String key, byte[] value) throws IOException {
     if (key == null || value == null) {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }
