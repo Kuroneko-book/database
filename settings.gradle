@@ -1,3 +1,7 @@
+plugins {
+    id 'org.gradle.toolchains.foojay-resolver-convention' version '0.8.0'
+}
+
 rootProject.name = 'database'
 
 include 'chapter01'
@@ -9,4 +13,5 @@ include 'chapter06'
 include 'chapter07'
 include 'minidb'
 include 'minidbchap1'
+include 'minidbchap2'
 // 新しい章ができたらここに加えていく
