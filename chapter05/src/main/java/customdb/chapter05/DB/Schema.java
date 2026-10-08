@@ -53,6 +53,10 @@ public class Schema {
         case STRING -> 4 + length;
       };
     }
+
+    public boolean isIndexed() {
+      return name.equalsIgnoreCase("id");
+    }
   }
 
   public enum DataType {
