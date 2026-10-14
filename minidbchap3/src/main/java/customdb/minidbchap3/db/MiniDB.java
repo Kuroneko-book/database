@@ -1,6 +1,8 @@
 package customdb.minidbchap3.db;
 
 import customdb.minidbchap3.parser.SimpleParser;
+import customdb.minidbchap3.storage.PageManager;
+import customdb.minidbchap3.storage.Record;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Scanner;
