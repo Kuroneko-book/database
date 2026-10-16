@@ -15,4 +15,5 @@ include 'minidb'
 include 'minidbchap1'
 include 'minidbchap2'
 include 'minidbchap3'
+include 'minidbchap4'
 // 新しい章ができたらここに加えていく
