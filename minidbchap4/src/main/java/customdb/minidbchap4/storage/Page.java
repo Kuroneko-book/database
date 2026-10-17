@@ -187,8 +187,18 @@ public class Page {
       return -1;
     }
 
-    deleteRecord(oldLpIndex);
-    return insertRecord(record);
+    byte[] original = data.clone();
+    boolean updated = false;
+    try {
+      deleteRecord(oldLpIndex);
+      int newLpIndex = insertRecord(record);
+      updated = newLpIndex != -1;
+      return newLpIndex;
+    } finally {
+      if (!updated) {
+        System.arraycopy(original, 0, data, 0, PAGE_SIZE);
+      }
+    }
   }
 
   // LP_NORMALの有効データのみをページ末尾（Upper側）に隙間なく詰め直す
@@ -250,5 +260,12 @@ public class Page {
   // ラインポインタ4バイト）を計算する
   public static int calculateRequiredSpace(Record record) {
     return record.getSerializedSize() + LINE_POINTER_SIZE;
+  }
+
+  // 新規挿入のために実際に確保できる空き容量（バイト数）を返す
+  // スロットが一杯かつ再利用できない場合は、新たなラインポインタ分（4バイト）を差し引く
+  public int getInsertableSpace() {
+    boolean reusableSlot = findUnusedSlot() != -1 || hasDeadTuples();
+    return getTotalFreeSpace() - (reusableSlot ? 0 : LINE_POINTER_SIZE);
   }
 }
