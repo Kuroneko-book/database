@@ -1,0 +1,17 @@
+# 本書の章立て（Re:VIEW catalog）
+#
+# PREDEF ... 前置き（章番号を消費しない：まえがき・導入）
+# CHAPS  ... 本文の章。ファイル名 chapNN.re と、コードの minidbchapNN を対応させている
+#            例: chap01.re = minidbchap1 の解説
+# POSTDEF ... 後置き（あとがき・付録）を実装したらここに追加する
+# APPENDIX ... 付録章（番号付き）を実装したらここに追加する
+
+PREDEF:
+  - preface.re
+  - intro.re
+
+CHAPS:
+  - chap01.re
+  - chap02.re
+  - chap03.re
+  - chap04.re

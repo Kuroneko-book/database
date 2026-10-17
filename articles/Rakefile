@@ -1,0 +1,21 @@
+# Re:VIEW プロジェクトのビルドタスク
+#
+# 使い方（docker-compose の review サービスを利用する場合）:
+#   docker compose run --rm review rake pdf    # PDF 生成
+#   docker compose run --rm review rake clean  # 中間ファイルの削除
+#
+# 出力: minidb.pdf（config.yml の bookname に依存）
+
+require 'fileutils'
+
+task :default => :pdf
+
+desc 'PDF を生成する'
+task :pdf do
+  sh 'review-pdfmaker config.yml'
+end
+
+desc 'ビルド中間ファイルと PDF を削除する'
+task :clean do
+  FileUtils.rm_f(Dir.glob(File.join(__dir__, '*.pdf')))
+end
