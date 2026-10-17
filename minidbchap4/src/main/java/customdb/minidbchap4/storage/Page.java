@@ -261,11 +261,4 @@ public class Page {
   public static int calculateRequiredSpace(Record record) {
     return record.getSerializedSize() + LINE_POINTER_SIZE;
   }
-
-  // 新規挿入のために実際に確保できる空き容量（バイト数）を返す
-  // スロットが一杯かつ再利用できない場合は、新たなラインポインタ分（4バイト）を差し引く
-  public int getInsertableSpace() {
-    boolean reusableSlot = findUnusedSlot() != -1 || hasDeadTuples();
-    return getTotalFreeSpace() - (reusableSlot ? 0 : LINE_POINTER_SIZE);
-  }
 }

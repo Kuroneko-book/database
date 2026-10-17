@@ -34,7 +34,7 @@ public class PageManager implements AutoCloseable {
     int numPages = diskManager.getPageCount();
     for (int p = 0; p < numPages; p++) {
       Page page = diskManager.readPage(p);
-      fsm.addPage(page.getInsertableSpace());
+      fsm.addPage(page.getTotalFreeSpace());
       for (int lpIndex = 0; lpIndex < page.getNumLinePointers(); lpIndex++) {
         Record record = page.getRecord(lpIndex);
         if (record != null) {
@@ -70,9 +70,9 @@ public class PageManager implements AutoCloseable {
     diskManager.writePage(pageNo, page);
 
     if (pageNo < getPageCount()) {
-      fsm.updatePage(pageNo, page.getInsertableSpace());
+      fsm.updatePage(pageNo, page.getTotalFreeSpace());
     } else {
-      fsm.addPage(page.getInsertableSpace());
+      fsm.addPage(page.getTotalFreeSpace());
     }
   }
 
@@ -138,7 +138,7 @@ public class PageManager implements AutoCloseable {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }
     Record newRecord = new Record(key, newValue);
-    int requiredSpace = newRecord.getSerializedSize();
+    int requiredSpace = Page.calculateRequiredSpace(newRecord);
     if (requiredSpace > Page.MAX_RECORD_SIZE) {
       throw new IllegalArgumentException(
           "Record is too large. Max allowed: " + Page.MAX_RECORD_SIZE + " bytes.");
@@ -179,8 +179,9 @@ public class PageManager implements AutoCloseable {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }
     Record record = new Record(key, value);
+    int requiredSpace = Page.calculateRequiredSpace(record);
 
-    if (record.getSerializedSize() > Page.MAX_RECORD_SIZE) {
+    if (requiredSpace > Page.MAX_RECORD_SIZE) {
       throw new IllegalArgumentException(
           "Record is too large. Max allowed: " + Page.MAX_RECORD_SIZE + " bytes.");
     }
@@ -194,7 +195,7 @@ public class PageManager implements AutoCloseable {
   }
 
   private TupleId storeRecord(Record record) throws IOException {
-    int requiredSpace = record.getSerializedSize();
+    int requiredSpace = Page.calculateRequiredSpace(record);
     int targetPageNo = fsm.getTargetPage(requiredSpace);
     Page page;
     int slot = -1;
@@ -207,7 +208,7 @@ public class PageManager implements AutoCloseable {
         return new TupleId(targetPageNo, slot);
       }
       // 既存ページに収まらなかった場合、FSMを最新化してフォールバック
-      fsm.updatePage(targetPageNo, page.getInsertableSpace());
+      fsm.updatePage(targetPageNo, page.getTotalFreeSpace());
     }
 
     // 新規ページを作成して挿入
