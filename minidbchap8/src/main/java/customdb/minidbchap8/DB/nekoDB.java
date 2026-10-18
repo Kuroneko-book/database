@@ -26,7 +26,7 @@ public class nekoDB {
 
   public void start() {
     while (true) {
-      System.out.print("db > ");
+      System.out.print("minidb > ");
       System.out.flush();
 
       if (!scanner.hasNextLine()) {
