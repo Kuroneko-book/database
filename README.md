@@ -101,7 +101,7 @@ docker compose exec dev gradle spotlessCheck
 
 第7章 実行処理の構築
 
-第8章 構造の分離
+第8章 同時に使えるデータベース（トランザクションとACID）
 
 第9章 パフォーマンスの改善
 
