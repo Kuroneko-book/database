@@ -9,3 +9,6 @@ bin/
 
 # Ignore database storage file
 data
+
+# Ignore AI agent prompt file
+AGENTS.md
