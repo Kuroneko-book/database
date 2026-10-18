@@ -6,3 +6,13 @@ services:
     # REPL（対話型プログラム）で標準入力を受け付けるために必須
     stdin_open: true
     tty: true
+
+  # Re:VIEW 原稿（articles/）を PDF でビルドするためのコンテナ
+  # 使い方: docker compose run --rm review
+  review:
+    image: vvakame/review:5.9
+    volumes:
+      - ./articles:/work
+    working_dir: /work
+    stdin_open: true
+    tty: true

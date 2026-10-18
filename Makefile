@@ -39,4 +39,12 @@ insert:
 test:
 	docker compose exec dev gradle :$(CHAP):test --rerun-tasks
 
-.PHONY: up down re shell run fmt check insert test
+# Re:VIEW 原稿から PDF を生成する (articles/ 配下に minidb.pdf が出力される)
+book:
+	docker compose run --rm review rake pdf
+
+# Re:VIEW ビルドの中間生成物を削除する
+bookclean:
+	docker compose run --rm review rake clean
+
+.PHONY: up down re shell run fmt check insert test book bookclean

@@ -1,0 +1,27 @@
+# Re:VIEW 共通設定
+review_version: 5.0
+
+# 書籍全体のメタ情報（適宜書き換えてください）
+bookname: kuroneko-book
+booktitle:
+  name: "0から作る自作DB入門"
+subtitle: "課題駆動で学ぶDBの仕組み"
+author: 佐佐木悠人
+language: ja
+
+# 章立て（catalog.yaml に PREDEF / CHAPS / POSTDEF を定義している）
+catalogfile: catalog.yaml
+
+# 用紙・組版
+titlepage: true
+date: "2026-10-17"
+
+# 目次（第N章と節の一覧）を生成する
+toc: true
+
+# PDF (LaTeX) ビルド設定
+# vvakame/review コンテナを想定（uplatex / dvipdfmx が入っている。
+# 本文書体は、コンテナのデフォルトである原の味フォントで出力される）
+# 本文の文字サイズを既定の10ptから12ptへ上げる
+# 余白と適度のバランスを取る（A4判・12pt・行長42字・39行）
+texdocumentclass: ["review-jsbook", "media=ebook,paper=a4,fontsize=12pt,line_length=42zw,number_of_lines=39"]
