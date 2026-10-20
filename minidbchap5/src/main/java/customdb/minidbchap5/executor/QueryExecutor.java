@@ -1,13 +1,18 @@
-package customdb.chapter05.DB;
+package customdb.minidbchap5.executor;
 
-import customdb.chapter05.Parser.Statement;
-import customdb.chapter05.Parser.Statement.JoinClause;
+import customdb.minidbchap5.parser.Statement;
+import customdb.minidbchap5.table.Catalog;
+import customdb.minidbchap5.table.Row;
+import customdb.minidbchap5.table.Schema;
+import customdb.minidbchap5.table.Table;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 
-public class QueryExecutor {
+public class QueryExecutor implements AutoCloseable {
   private final Catalog catalog;
 
   public QueryExecutor(Path baseDir) throws IOException {
@@ -39,7 +44,6 @@ public class QueryExecutor {
   }
 
   private void executeInsert(Statement.Insert statement) throws IOException {
-
     Schema schema = catalog.requireSchema(statement.tableName());
     Table table = catalog.requireTable(statement.tableName());
 
@@ -52,15 +56,15 @@ public class QueryExecutor {
   }
 
   private void executeSelect(Statement.Select statement) throws IOException {
-    // From句のテーブルを取得し、スキーマを取得する(JOIN句がある場合は左側)
     Table leftTable = catalog.requireTable(statement.tableName());
     Schema leftSchema = catalog.requireSchema(statement.tableName());
 
     List<Row> rows = new ArrayList<>();
     boolean usedIndex = false;
     Statement.Condition condition = statement.whereCondition();
+    boolean hasJoin = statement.joinClause() != null;
 
-    if (condition != null && condition.operator().equals("=")) {
+    if (!hasJoin && condition != null && condition.operator().equals("=")) {
       String colName = condition.left();
       if (colName.contains(".")) {
         colName = colName.substring(colName.lastIndexOf('.') + 1);
@@ -69,15 +73,7 @@ public class QueryExecutor {
       if (col != null && col.isIndexed() && leftTable.hasIndex(col.name())) {
         Object rawVal = resolveColumnOrLiteral(new Row(), condition.right());
         Object searchVal = parseValue(rawVal.toString(), col);
-        List<Row> indexResults = leftTable.searchByIndex(col.name(), searchVal);
-
-        for (Row row : indexResults) {
-          if (statement.joinClause() == null) {
-            rows.add(row);
-          } else {
-            rows.add(qualifyRow(statement.tableName(), leftSchema, row));
-          }
-        }
+        rows.addAll(leftTable.searchByIndex(col.name(), searchVal));
         usedIndex = true;
       }
     }
@@ -92,14 +88,10 @@ public class QueryExecutor {
       }
     }
 
-    // JOIN句がある場合は、左側のテーブルの行に対して右側のテーブルを結合する
-    boolean hasJoin = statement.joinClause() != null;
-
     if (hasJoin) {
       rows = executeJoin(rows, statement.joinClause());
     }
 
-    // WHERE句がある場合は、条件に一致する行のみを抽出する
     List<Row> filteredRows = new ArrayList<>();
 
     for (Row row : rows) {
@@ -129,8 +121,11 @@ public class QueryExecutor {
       Row row = record.row();
 
       if (matches(row, statement.whereCondition())) {
-        row.put(targetColumn.name(), newValue);
-        table.update(record.recordId(), row);
+        // 行は全列を持っているので、該当列だけ差し替えて更新する
+        Row updated = new Row();
+        updated.putAll(row);
+        updated.put(targetColumn.name(), newValue);
+        table.update(record.recordId(), updated);
         updatedCount++;
       }
     }
@@ -144,9 +139,7 @@ public class QueryExecutor {
     int deletedCount = 0;
 
     for (Table.Record record : table.scanRecords()) {
-      Row row = record.row();
-
-      if (matches(row, statement.whereCondition())) {
+      if (matches(record.row(), statement.whereCondition())) {
         table.delete(record.recordId());
         deletedCount++;
       }
@@ -155,24 +148,27 @@ public class QueryExecutor {
     System.out.println("Deleted " + deletedCount + " row(s).");
   }
 
-  private List<Row> executeJoin(List<Row> leftRows, JoinClause joinClause) throws IOException {
+  private List<Row> executeJoin(List<Row> leftRows, Statement.JoinClause joinClause)
+      throws IOException {
     String rightTableName = joinClause.tableName();
 
     Table rightTable = catalog.requireTable(rightTableName);
     Schema rightSchema = catalog.requireSchema(rightTableName);
 
+    List<Row> rightRows = new ArrayList<>();
+
+    for (Row right : rightTable.scan()) {
+      rightRows.add(qualifyRow(rightTableName, rightSchema, right));
+    }
+
     List<Row> result = new ArrayList<>();
 
-    // Nested Loop Join
     for (Row left : leftRows) {
-      for (Row rightRaw : rightTable.scan()) {
-        Row right = qualifyRow(rightTableName, rightSchema, rightRaw);
-
+      for (Row right : rightRows) {
         Row joined = new Row();
         joined.putAll(left);
         joined.putAll(right);
 
-        // JOIN句のON条件に一致する行のみを結果に追加する
         if (matches(joined, joinClause.onCondition())) {
           result.add(joined);
         }
@@ -193,7 +189,7 @@ public class QueryExecutor {
     List<String> columnNames = statement.columnNames();
     List<String> values = statement.values();
 
-    if (columnNames == null || columnNames.isEmpty()) {
+    if (columnNames.isEmpty()) {
       if (values.size() != schema.getColumns().size()) {
         throw new IllegalArgumentException(
             "Column count does not match value count. columns="
@@ -241,7 +237,8 @@ public class QueryExecutor {
       case FLOAT -> Float.parseFloat(value);
       case DOUBLE -> Double.parseDouble(value);
       case STRING -> {
-        if (value.length() > column.length()) {
+        if (column.length() > 0
+            && value.getBytes(StandardCharsets.UTF_8).length > column.length()) {
           throw new IllegalArgumentException(
               "Value length exceeds column length. column="
                   + column.name()
@@ -255,7 +252,7 @@ public class QueryExecutor {
     };
   }
 
-  // Columnの型に応じたデフォルト値を返す（insertでvalueの指定がない場合でも初期化される）
+  // Insertで値が指定されなかった列のデフォルト値
   private Object defaultValue(Schema.Column column) {
     return switch (column.type()) {
       case INTEGER -> 0;
@@ -271,13 +268,15 @@ public class QueryExecutor {
 
     for (Schema.Column column : schema.getColumns()) {
       String columnName = column.name();
-      Object value = row.get(columnName);
-
-      // qualified.put(columnName, value);
-      qualified.put(tableName + "." + columnName, value);
+      qualified.put(normalize(tableName) + "." + columnName, row.get(columnName));
     }
 
     return qualified;
+  }
+
+  // 表名・列名は大文字小文字を区別しない
+  private String normalize(String name) {
+    return name.toLowerCase(Locale.ROOT);
   }
 
   // 結果の行を出力する
@@ -293,22 +292,19 @@ public class QueryExecutor {
     }
   }
 
-  // SELECT句で指定された列のみを抽出する
+  // SELECT句で指定された列のみ抽出する
   private Row projectRow(Row row, List<String> selectColumns, boolean hasJoin) {
     Row projected = new Row();
 
-    // SELECT * の場合は、すべての列を出力する
     if (selectColumns.size() == 1 && selectColumns.get(0).equals("*")) {
       for (String key : row.keySet()) {
-        // JOIN句がある場合はテーブル名付きの列名（users.id）を出力し、ない場合はテーブル名なしの列名を出力する
         if (hasJoin) {
+          // JOINではテーブル名付きの列だけを出力する
           if (key.contains(".")) {
             projected.put(key, row.get(key));
           }
-        } else {
-          if (!key.contains(".")) {
-            projected.put(key, row.get(key));
-          }
+        } else if (!key.contains(".")) {
+          projected.put(key, row.get(key));
         }
       }
 
@@ -323,7 +319,7 @@ public class QueryExecutor {
     return projected;
   }
 
-  // Rowが条件に一致するかどうかを判定する
+  // RowがWHERE/ON条件に一致するかどうかを判定する
   public boolean matches(Row row, Statement.Condition condition) {
     if (condition == null) {
       return true;
@@ -332,7 +328,6 @@ public class QueryExecutor {
     Object leftValue = resolveColumn(row, condition.left());
     Object rightValue = resolveColumnOrLiteral(row, condition.right());
 
-    // 左辺と右辺の値を比較する
     int cmp = compare(leftValue, rightValue);
 
     return switch (condition.operator()) {
@@ -353,7 +348,16 @@ public class QueryExecutor {
       return row.get(columnName);
     }
 
-    // テーブル名付きの列名（users.id）を探す
+    // 表名の大文字小文字を変えて指定しても、JOIN後の修飾列を解決できるようにする
+    if (columnName.contains(".")) {
+      for (String key : row.keySet()) {
+        if (key.equalsIgnoreCase(columnName)) {
+          return row.get(key);
+        }
+      }
+    }
+
+    // 修飾名（users.id）付きの列を探す
     String suffix = "." + columnName;
     Object found = null;
     int count = 0;
@@ -399,9 +403,7 @@ public class QueryExecutor {
 
   private int compare(Object left, Object right) {
     if (left instanceof Number && right instanceof Number) {
-      double l = toDouble(left);
-      double r = toDouble(right);
-      return Double.compare(l, r);
+      return Double.compare(toDouble(left), toDouble(right));
     }
 
     return left.toString().compareTo(right.toString());
@@ -433,7 +435,7 @@ public class QueryExecutor {
     }
   }
 
-  // クウォートを削除
+  // クォートを削除
   private String stripQuote(String value) {
     if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
       return value.substring(1, value.length() - 1);
@@ -442,6 +444,7 @@ public class QueryExecutor {
     return value;
   }
 
+  @Override
   public void close() throws IOException {
     catalog.close();
   }

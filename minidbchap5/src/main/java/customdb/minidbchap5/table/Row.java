@@ -1,4 +1,4 @@
-package customdb.chapter05.DB;
+package customdb.minidbchap5.table;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

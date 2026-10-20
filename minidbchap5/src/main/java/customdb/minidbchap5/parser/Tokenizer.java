@@ -1,4 +1,4 @@
-package customdb.chapter05.Parser;
+package customdb.minidbchap5.parser;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +31,8 @@ public class Tokenizer {
         tokens.add(String.valueOf(c));
       } else if (c == ';') {
         flush(currentToken, tokens);
-        // セミコロンはSQLの終端として扱うため、tokenには入れない
+        // セミコロンは文の終端判定のためにtokenとして残す
+        tokens.add(";");
       } else if (c == '=' || c == '<' || c == '>' || c == '!') {
         flush(currentToken, tokens);
 

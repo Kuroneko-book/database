@@ -133,7 +133,8 @@ public class PageManager implements AutoCloseable {
   }
 
   // 同一ページに収まらない場合は、旧データを削除してFSMで見つけた別ページへ再配置
-  public boolean updateRecordByKey(String key, String newValue) throws IOException {
+  // Stringからバイト列で受け取る形に変更
+  public boolean updateRecordByKey(String key, byte[] newValue) throws IOException {
     if (key == null || newValue == null) {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }
@@ -174,7 +175,8 @@ public class PageManager implements AutoCloseable {
     return true;
   }
 
-  public TupleId insertRecord(String key, String value) throws IOException {
+  // Stringからバイト列で受け取る形に変更
+  public TupleId insertRecord(String key, byte[] value) throws IOException {
     if (key == null || value == null) {
       throw new IllegalArgumentException("Key and value cannot be null.");
     }

@@ -1,6 +1,6 @@
-package customdb.chapter05.Parser;
+package customdb.minidbchap5.parser;
 
-import customdb.chapter05.DB.Schema;
+import customdb.minidbchap5.table.Schema;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -19,16 +19,41 @@ public class SimpleParser {
       throw new IllegalArgumentException("SQL is empty.");
     }
 
-    String command = tokens.get(0).toLowerCase();
+    List<String> statementTokens = extractStatementTokens(tokens);
+
+    String command = statementTokens.get(0).toLowerCase();
 
     return switch (command) {
-      case "select" -> parseSelect(tokens);
-      case "insert" -> parseInsert(tokens);
-      case "create" -> parseCreateTable(tokens);
-      case "update" -> parseUpdate(tokens);
-      case "delete" -> parseDelete(tokens);
+      case "select" -> parseSelect(statementTokens);
+      case "insert" -> parseInsert(statementTokens);
+      case "create" -> parseCreateTable(statementTokens);
+      case "update" -> parseUpdate(statementTokens);
+      case "delete" -> parseDelete(statementTokens);
       default -> throw new IllegalArgumentException("Unsupported SQL command: " + command);
     };
+  }
+
+  private List<String> extractStatementTokens(List<String> tokens) {
+    String lastToken = tokens.get(tokens.size() - 1);
+
+    // セミコロンが末尾に1つだけ付いているか確認
+    if (!lastToken.equals(";")) {
+      throw new IllegalArgumentException("SQL must end with a semicolon: " + lastToken);
+    }
+
+    for (int i = 0; i < tokens.size() - 1; i++) {
+      if (tokens.get(i).equals(";")) {
+        throw new IllegalArgumentException("Unexpected semicolon in SQL statement.");
+      }
+    }
+
+    List<String> statementTokens = tokens.subList(0, tokens.size() - 1);
+
+    if (statementTokens.isEmpty()) {
+      throw new IllegalArgumentException("SQL is empty.");
+    }
+
+    return statementTokens;
   }
 
   private Statement.Select parseSelect(List<String> tokens) {

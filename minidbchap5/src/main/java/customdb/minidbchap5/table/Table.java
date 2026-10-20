@@ -1,95 +1,84 @@
-package customdb.chapter05.DB;
+package customdb.minidbchap5.table;
 
+import customdb.minidbchap5.storage.PageManager;
 import java.io.IOException;
-import java.io.RandomAccessFile;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-public class Table {
-  private static final int PAGE_SIZE = 4096; // ページサイズを4KBに設定
+public class Table implements AutoCloseable {
 
-  private final Schema schema;
-  private final RandomAccessFile file;
-  private final Map<String, Index> indexes = new HashMap<>();
-
-  // レコード定義
-  public record RecordId(int pageNo, int slotNo) {}
+  // ページ/スロット位置ではなく内部の単調増加キーで表す安定したレコード識別子
+  public record RecordId(long key) {}
 
   public record Record(RecordId recordId, Row row) {}
 
+  private final Schema schema;
+  private final PageManager pageManager;
+
+  // 索引は id カラムのみ: id値 -> 同値を持つ行の surrogate key のリスト
+  private final Map<String, Map<Object, List<Long>>> indexes = new HashMap<>();
+
+  // 既存レコードの最大内部キー（空テーブルなら 0）。insert 時に +1 して採番する。
+  private long maxKey;
+
   public Table(Schema schema, Path path) throws IOException {
     this.schema = schema;
-    if (path.getParent() != null && !Files.exists(path.getParent())) {
-      Files.createDirectories(path.getParent());
+    this.pageManager = new PageManager(path.toString());
+
+    try {
+      loadExistingRecords();
+    } catch (IOException | RuntimeException e) {
+      try {
+        pageManager.close();
+      } catch (IOException closeError) {
+        e.addSuppressed(closeError);
+      }
+      throw e;
     }
-    this.file = new RandomAccessFile(path.toFile(), "rw");
-    buildIndexes();
   }
 
-  public void truncate() throws IOException {
-    file.setLength(0);
+  // open時に既存レコードから内部キーの最大値と索引を再構築する
+  private void loadExistingRecords() throws IOException {
+    for (Schema.Column column : schema.getColumns()) {
+      if (column.isIndexed()) {
+        indexes.put(column.name(), new HashMap<>());
+      }
+    }
+
+    for (var storageRecord : pageManager.findAllRecords()) {
+      Long key = decodeKey(storageRecord.key());
+      Row row = RowCodec.decode(schema, storageRecord.value());
+      if (key != null) {
+        if (key > maxKey) {
+          maxKey = key;
+        }
+        addToIndexes(key, row);
+      }
+    }
+  }
+
+  private Long decodeKey(String key) {
+    try {
+      return Long.parseLong(key);
+    } catch (NumberFormatException e) {
+      return null;
+    }
   }
 
   public void insert(Row row) throws IOException {
-    int recordSize = schema.getRecordSize();
-    int maxSlots = schema.getMaxSlots(PAGE_SIZE);
+    long key = maxKey + 1;
+    byte[] value = RowCodec.encode(schema, row);
 
-    int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
+    pageManager.insertRecord(Long.toString(key), value);
 
-    int targetPage = -1;
-    int targetSlot = -1;
-
-    for (int p = 0; p < numPages; p++) {
-      byte[] page = new byte[PAGE_SIZE];
-      file.seek((long) p * PAGE_SIZE);
-      file.read(page);
-
-      for (int s = 0; s < maxSlots; s++) {
-        int offset = s * recordSize;
-
-        if (page[offset] == 0) {
-          targetPage = p;
-          targetSlot = s;
-          break;
-        }
-      }
-
-      if (targetPage != -1) {
-        break;
-      }
-    }
-
-    if (targetPage == -1) {
-      targetPage = numPages;
-      targetSlot = 0;
-    }
-
-    byte[] page = new byte[PAGE_SIZE];
-
-    if (targetPage < numPages) {
-      file.seek((long) targetPage * PAGE_SIZE);
-      file.read(page);
-    }
-
-    byte[] recordBytes = serialize(row);
-    int offset = targetSlot * recordSize;
-
-    System.arraycopy(recordBytes, 0, page, offset, recordSize);
-
-    file.seek((long) targetPage * PAGE_SIZE);
-    file.write(page);
-
-    for (Map.Entry<String, Index> e : indexes.entrySet()) {
-      String col = e.getKey();
-      e.getValue().add(row.get(col), row);
-    }
+    maxKey = key;
+    addToIndexes(key, row);
   }
 
   public List<Row> scan() throws IOException {
@@ -105,190 +94,131 @@ public class Table {
   public List<Record> scanRecords() throws IOException {
     List<Record> records = new ArrayList<>();
 
-    int recordSize = schema.getRecordSize();
-    int maxSlots = schema.getMaxSlots(PAGE_SIZE);
-    int numPages = (int) Math.ceil((double) file.length() / PAGE_SIZE);
-
-    for (int p = 0; p < numPages; p++) {
-      byte[] page = new byte[PAGE_SIZE];
-      file.seek((long) p * PAGE_SIZE);
-      file.read(page);
-
-      for (int s = 0; s < maxSlots; s++) {
-        int offset = s * recordSize;
-
-        if (page[offset] == 1) {
-          byte[] recordBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
-          Row row = deserialize(recordBytes);
-
-          if (row != null) {
-            records.add(new Record(new RecordId(p, s), row));
-          }
-        }
+    for (var storageRecord : pageManager.findAllRecords()) {
+      Long key = decodeKey(storageRecord.key());
+      Row row = RowCodec.decode(schema, storageRecord.value());
+      if (key != null) {
+        records.add(new Record(new RecordId(key), row));
       }
     }
+
+    records.sort(Comparator.comparingLong((Record r) -> r.recordId().key()));
 
     return records;
   }
 
   public void update(RecordId recordId, Row row) throws IOException {
-    Row oldRow = getRecord(recordId);
+    String key = encodeKey(recordId);
 
-    for (Map.Entry<String, Index> e : indexes.entrySet()) {
-      String col = e.getKey();
-      e.getValue().remove(oldRow.get(col), oldRow);
+    var oldRecord = pageManager.findRecord(key);
+    if (oldRecord == null) {
+      throw new IllegalArgumentException("Record not found: " + recordId.key());
+    }
+    Row oldRow = RowCodec.decode(schema, oldRecord.value());
+
+    if (!pageManager.updateRecordByKey(key, RowCodec.encode(schema, row))) {
+      throw new IllegalArgumentException("Record not found: " + recordId.key());
     }
 
-    int recordSize = schema.getRecordSize();
-    int offset = recordId.slotNo() * recordSize;
-
-    byte[] page = new byte[PAGE_SIZE];
-
-    file.seek((long) recordId.pageNo() * PAGE_SIZE);
-    file.readFully(page);
-
-    byte[] recordBytes = serialize(row);
-    System.arraycopy(recordBytes, 0, page, offset, recordSize);
-
-    file.seek((long) recordId.pageNo() * PAGE_SIZE);
-    file.write(page);
-
-    for (Map.Entry<String, Index> e : indexes.entrySet()) {
-      String col = e.getKey();
-      e.getValue().add(row.get(col), row);
-    }
+    removeFromIndexes(recordId.key(), oldRow);
+    addToIndexes(recordId.key(), row);
   }
 
   public void delete(RecordId recordId) throws IOException {
-    Row row = getRecord(recordId);
+    String key = encodeKey(recordId);
+    var oldRecord = pageManager.findRecord(key);
 
-    if (row != null) {
-      for (Map.Entry<String, Index> e : indexes.entrySet()) {
-        String col = e.getKey();
-        e.getValue().remove(row.get(col), row);
-      }
+    if (oldRecord == null) {
+      return;
     }
 
-    int recordSize = schema.getRecordSize();
-    int offset = recordId.slotNo() * recordSize;
-
-    byte[] page = new byte[PAGE_SIZE];
-
-    file.seek((long) recordId.pageNo() * PAGE_SIZE);
-    file.readFully(page);
-
-    page[offset] = 0;
-
-    file.seek((long) recordId.pageNo() * PAGE_SIZE);
-    file.write(page);
+    Row oldRow = RowCodec.decode(schema, oldRecord.value());
+    pageManager.deleteRecordByKey(key);
+    removeFromIndexes(recordId.key(), oldRow);
   }
 
   public Row getRecord(RecordId recordId) throws IOException {
-    int recordSize = schema.getRecordSize();
-    int offset = recordId.slotNo() * recordSize;
-
-    byte[] page = new byte[PAGE_SIZE];
-
-    file.seek((long) recordId.pageNo() * PAGE_SIZE);
-    file.readFully(page);
-
-    byte[] recordBytes = Arrays.copyOfRange(page, offset, offset + recordSize);
-
-    return deserialize(recordBytes);
-  }
-
-  private void buildIndexes() throws IOException {
-    for (Schema.Column column : schema.getColumns()) {
-      if (column.isIndexed()) {
-        indexes.put(column.name(), new Index());
-      }
-    }
-
-    if (indexes.isEmpty()) return;
-
-    for (Row row : scan()) {
-      for (String col : indexes.keySet()) {
-        Index idx = indexes.get(col);
-        idx.add(row.get(col), row);
-      }
-    }
+    var record = pageManager.findRecord(encodeKey(recordId));
+    return record == null ? null : RowCodec.decode(schema, record.value());
   }
 
   public List<Row> searchByIndex(String column, Object value) {
-    Index idx = indexes.get(column);
+    Map<Object, List<Long>> index = indexFor(column);
 
-    if (idx == null) {
+    List<Long> keys = new ArrayList<>(index.getOrDefault(value, List.of()));
+    Collections.sort(keys);
+
+    List<Row> rows = new ArrayList<>();
+    for (Long key : keys) {
+      try {
+        Row row = getRecord(new RecordId(key));
+        if (row != null) {
+          rows.add(row);
+        }
+      } catch (IOException e) {
+        throw new UncheckedIOException("Failed to read record for key: " + key, e);
+      }
+    }
+
+    return rows;
+  }
+
+  private Map<Object, List<Long>> indexFor(String column) {
+    if (!hasIndex(column)) {
       throw new IllegalStateException("No index found for column: " + column);
     }
 
-    return idx.search(value);
+    return indexes.get(findIndexedColumn(column).name());
   }
 
   public boolean hasIndex(String column) {
-    return indexes.containsKey(column);
+    Schema.Column indexed = findIndexedColumn(column);
+    return indexed != null && indexes.containsKey(indexed.name());
   }
 
-  // Row -> byte[]
-  private byte[] serialize(Row row) {
-    ByteBuffer bb = ByteBuffer.allocate(schema.getRecordSize());
-    bb.put((byte) 1);
-
-    for (Schema.Column column : schema.getColumns()) {
-      Object value = row.get(column.name());
-
-      switch (column.type()) {
-        case INTEGER -> bb.putInt((Integer) value);
-        case FLOAT -> bb.putFloat((Float) value);
-        case DOUBLE -> bb.putDouble((Double) value);
-        case STRING -> {
-          byte[] bytes = value.toString().getBytes(StandardCharsets.UTF_8);
-          final int len = Math.min(bytes.length, column.length());
-          bb.putInt(len);
-          bb.put(bytes, 0, len);
-
-          byte[] padding = new byte[column.length() - len];
-          bb.put(padding);
-        }
-      }
-    }
-
-    return bb.array();
-  }
-
-  // byte[] -> Row
-  private Row deserialize(byte[] recordBytes) {
-    ByteBuffer bb = ByteBuffer.wrap(recordBytes);
-    Row row = new Row();
-
-    byte used = bb.get();
-    if (used != 1) {
+  private Schema.Column findIndexedColumn(String column) {
+    Schema.Column target = schema.getColumn(column);
+    if (target == null || !target.isIndexed()) {
       return null;
     }
+    return target;
+  }
 
+  private void addToIndexes(long key, Row row) {
     for (Schema.Column column : schema.getColumns()) {
-      switch (column.type()) {
-        case INTEGER -> row.put(column.name(), bb.getInt());
-        case FLOAT -> row.put(column.name(), bb.getFloat());
-        case DOUBLE -> row.put(column.name(), bb.getDouble());
-        case STRING -> {
-          int len = bb.getInt();
-          byte[] bytes = new byte[len];
-          bb.get(bytes, 0, len);
-          String value = new String(bytes, StandardCharsets.UTF_8);
-          row.put(column.name(), value);
+      if (!column.isIndexed()) {
+        continue;
+      }
 
-          int paddingLength = column.length() - len;
-          if (paddingLength > 0) {
-            bb.position(bb.position() + paddingLength);
-          }
+      Object value = row.get(column.name());
+      indexes.get(column.name()).computeIfAbsent(value, ignored -> new ArrayList<>()).add(key);
+    }
+  }
+
+  private void removeFromIndexes(long key, Row oldRow) {
+    for (Schema.Column column : schema.getColumns()) {
+      if (!column.isIndexed()) {
+        continue;
+      }
+
+      Object value = oldRow.get(column.name());
+      List<Long> keys = indexes.get(column.name()).get(value);
+
+      if (keys != null) {
+        keys.remove((Long) key);
+        if (keys.isEmpty()) {
+          indexes.get(column.name()).remove(value);
         }
       }
     }
-
-    return row;
   }
 
+  private String encodeKey(RecordId recordId) {
+    return Long.toString(recordId.key());
+  }
+
+  @Override
   public void close() throws IOException {
-    file.close();
+    pageManager.close();
   }
 }

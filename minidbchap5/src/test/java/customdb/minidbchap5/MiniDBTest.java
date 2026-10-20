@@ -4,9 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import customdb.minidbchap5.db.MiniDB;
-import customdb.minidbchap5.parser.SimpleParser;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
@@ -16,219 +16,156 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 public class MiniDBTest {
   private final PrintStream originalOut = System.out;
   private final InputStream originalIn = System.in;
   private ByteArrayOutputStream outContent;
 
-  // テスト間でデータが引き継がれてエラーになるのを防ぐため、DBファイルをリセットする
-  private void cleanUpDbFile() {
-    try {
-      Files.deleteIfExists(Path.of("data/mini.db"));
-    } catch (Exception ignored) {
-    }
-  }
-
   @BeforeEach
   void setUp() {
     outContent = new ByteArrayOutputStream();
     System.setOut(new PrintStream(outContent));
-    cleanUpDbFile();
   }
 
   @AfterEach
   void tearDown() {
     System.setOut(originalOut);
     System.setIn(originalIn);
-    cleanUpDbFile();
   }
 
   private String getOutput() {
     return outContent.toString();
   }
 
-  @Nested
-  @DisplayName("MiniDB 単体操作テスト")
-  class CrudOperationsTest {
-    @Test
-    @DisplayName("insert: 正常系および重複・不正キーのエラーハンドリング")
-    void testInsert() {
-      try (MiniDB db = new MiniDB()) {
-        outContent.reset();
+  private String session(String... lines) {
+    return String.join("\n", lines) + "\n";
+  }
 
-        // 正常登録
-        db.insert("1", "Alice");
-        assertTrue(getOutput().contains("Inserted and saved to disk."));
-        outContent.reset();
+  private void runRepl(Path dataDir, String input) {
+    outContent.reset();
+    System.setIn(new ByteArrayInputStream(input.getBytes()));
 
-        // 重複キー登録
-        db.insert("1", "Bob");
-        assertTrue(getOutput().contains("Key already exists. Use update command to modify."));
-        outContent.reset();
-
-        // 不正キー登録（数値以外）
-        db.insert("abc", "Charlie");
-        assertTrue(getOutput().contains("Error: Key must be an integer."));
-      }
-    }
-
-    @Test
-    @DisplayName("select: キー指定検索および全件検索")
-    void testSelect() {
-      try (MiniDB db = new MiniDB()) {
-        db.insert("10", "Ten");
-        db.insert("20", "Twenty");
-        outContent.reset();
-
-        // 存在するキー
-        db.select("10");
-        assertTrue(getOutput().contains("Ten"));
-        outContent.reset();
-
-        // 存在しないキー
-        db.select("99");
-        assertTrue(getOutput().contains("Record not found."));
-        outContent.reset();
-
-        // 不正キー
-        db.select("invalid");
-        assertTrue(getOutput().contains("Error: Key must be an integer."));
-        outContent.reset();
-
-        // 全件取得
-        db.select();
-        String output = getOutput();
-        assertTrue(output.contains("(10, Ten)")); // カンマの後のスペース追加
-        assertTrue(output.contains("(20, Twenty)")); // カンマの後のスペース追加
-      }
-    }
-
-    @Test
-    @DisplayName("update: 正常更新および存在しないキー・不正キーのエラーハンドリング")
-    void testUpdate() {
-      try (MiniDB db = new MiniDB()) {
-        db.insert("1", "OldValue");
-        outContent.reset();
-
-        // 正常更新
-        db.update("1", "NewValue");
-        assertTrue(getOutput().contains("Updated and saved to disk."));
-        outContent.reset();
-
-        // 更新結果の確認
-        db.select("1");
-        assertTrue(getOutput().contains("NewValue"));
-        outContent.reset();
-
-        // 存在しないキーの更新
-        db.update("999", "NotExist");
-        assertTrue(getOutput().contains("Record not found."));
-        outContent.reset();
-
-        // 不正キーの更新
-        db.update("xyz", "Invalid");
-        assertTrue(getOutput().contains("Error: Key must be an integer."));
-      }
-    }
-
-    @Test
-    @DisplayName("delete: 正常削除および存在しないキー・不正キーのエラーハンドリング")
-    void testDelete() {
-      try (MiniDB db = new MiniDB()) {
-        db.insert("1", "ToDelete");
-        outContent.reset();
-
-        // 正常削除
-        db.delete("1");
-        assertTrue(getOutput().contains("Deleted and saved to disk."));
-        outContent.reset();
-
-        // 削除後の検索（存在しない）
-        db.select("1");
-        assertTrue(getOutput().contains("Record not found."));
-        outContent.reset();
-
-        // 存在しないキーの削除
-        db.delete("999");
-        assertTrue(getOutput().contains("Record not found."));
-        outContent.reset();
-
-        // 不正キーの削除
-        db.delete("bad_key");
-        assertTrue(getOutput().contains("Error: Key must be an integer."));
-      }
+    try (MiniDB db = new MiniDB(dataDir.toString())) {
+      db.start();
     }
   }
 
   @Nested
-  @DisplayName("SimpleParser 単体テスト")
-  class ParserTest {
+  @DisplayName("SQLのテスト")
+  class SqlLifecycleTest {
     @Test
-    @DisplayName("コマンド解析と小文字化・トークン分割")
-    void testParser() {
-      SimpleParser parser = new SimpleParser();
-
-      String[] tokens = parser.parse("  INSERT   42   Dave   ");
-      assertEquals(3, tokens.length);
-      assertEquals("insert", tokens[0]);
-      assertEquals("42", tokens[1]);
-      assertEquals("Dave", tokens[2]);
-      assertEquals("insert", parser.getCommand(tokens));
-
-      String[] singleToken = parser.parse("EXIT");
-      assertEquals("exit", parser.getCommand(singleToken));
-    }
-  }
-
-  @Nested
-  @DisplayName("CLI / REPL 統合テスト (start)")
-  class ReplIntegrationTest {
-    @Test
-    @DisplayName("標準入力を介した対話型セッション全体のシナリオテスト")
-    void testInteractiveSession() {
-      String simulatedInput =
-          String.join(
-                  "\n",
-                  "insert 1 Taro",
-                  "insert 2 Jiro",
-                  "select 1",
-                  "select",
-                  "update 1 Saburo",
-                  "select 1",
-                  "delete 2",
-                  "select 2",
-                  "invalid_command",
-                  "exit")
-              + "\n";
-
-      System.setIn(new ByteArrayInputStream(simulatedInput.getBytes()));
-
-      try (MiniDB db = new MiniDB()) {
-        db.start();
-      }
+    @DisplayName("各コマンドが正常に実行でき、再起動後にデータが保持されている")
+    void testSqlLifecycleAndReopen(@TempDir Path dir) {
+      runRepl(
+          dir,
+          session(
+              "CREATE TABLE users (id int, name varchar(50), score double);",
+              "INSERT INTO users VALUES (1, 'Alice', 3.5);",
+              "INSERT INTO users (id, name, score) VALUES (2, 'Bob', 1.25);",
+              "SELECT * FROM users;",
+              "SELECT name FROM users WHERE id = 2;",
+              "UPDATE users SET score = 9.5 WHERE name = 'Alice';",
+              "UPDATE users SET id = 10 WHERE name = 'Alice';",
+              "SELECT * FROM users WHERE id = 10;",
+              "CREATE TABLE orders (id int, item varchar(20), price float);",
+              "INSERT INTO orders VALUES (10, 'apple', 100.5);",
+              "INSERT INTO orders VALUES (2, 'banana', 200.5);",
+              "SELECT users.name, orders.item FROM users JOIN orders ON users.id = orders.id;",
+              "DELETE FROM users WHERE id = 10;",
+              "SELECT * FROM users;",
+              "exit"));
 
       String output = getOutput();
 
-      // 初期メッセージ
-      assertTrue(output.contains("Welcome to minidb!"));
-      // insert
-      assertTrue(output.contains("Inserted and saved to disk."));
-      // select 1
-      assertTrue(output.contains("Taro"));
-      // select 全件
-      assertTrue(output.contains("(1, Taro)")); // カンマの後のスペース追加
-      assertTrue(output.contains("(2, Jiro)")); // カンマの後のスペース追加
-      // update
-      assertTrue(output.contains("Updated and saved to disk."));
-      assertTrue(output.contains("Saburo"));
-      // delete
-      assertTrue(output.contains("Deleted and saved to disk."));
-      assertTrue(output.contains("Record not found."));
-      // 不明なコマンド
-      assertTrue(output.contains("Unknown command"));
-      // 終了
+      assertTrue(output.contains("Table created: users"));
+      assertTrue(output.contains("Inserted into users: {id=1, name=Alice, score=3.5}"));
+      assertTrue(output.contains("{id=2, name=Bob, score=1.25}"));
+      assertTrue(output.contains("{name=Bob}"));
+      assertTrue(output.contains("Updated 1 row(s)."));
+      assertTrue(output.contains("{id=10, name=Alice, score=9.5}"));
+      assertTrue(output.contains("{users.name=Alice, orders.item=apple}"));
+      assertTrue(output.contains("{users.name=Bob, orders.item=banana}"));
+      assertTrue(output.contains("Deleted 1 row(s)."));
+      assertTrue(output.contains("Bye!"));
+
+      // 再起動（close後の同一データディレクトリで新しく起動）
+      runRepl(
+          dir,
+          session(
+              "SELECT * FROM users;",
+              "SELECT users.name, orders.item FROM users JOIN orders ON users.id = orders.id;",
+              "SELECT name FROM users WHERE id = 2;",
+              "exit"));
+
+      String reopenOutput = getOutput();
+      assertTrue(reopenOutput.contains("{id=2, name=Bob, score=1.25}"));
+      assertTrue(reopenOutput.contains("{users.name=Bob, orders.item=banana}"));
+      assertTrue(reopenOutput.contains("{name=Bob}"));
+    }
+  }
+
+  @Nested
+  @DisplayName("セミコロンのチェック")
+  class SemicolonRuleTest {
+    @Test
+    @DisplayName("SQLはセミコロン必須 exit/timeは不要")
+    void testSemicolonRules(@TempDir Path dir) {
+      runRepl(
+          dir,
+          session(
+              "CREATE TABLE t (id int, name varchar(50));",
+              "INSERT INTO t VALUES (1, 'a;b');", // クォートで囲まれたセミコロンは文字列として認識
+              "SELECT * FROM t;",
+              "SELECT * FROM t",
+              ";;",
+              "time",
+              "SELECT * FROM t;",
+              "time",
+              "DELETE FROM t WHERE id = 1;",
+              "SELECT * FROM t;",
+              "exit"));
+
+      String output = getOutput();
+
+      assertTrue(output.contains("Inserted into t: {id=1, name=a;b}"));
+      assertTrue(output.contains("{id=1, name=a;b}"));
+      assertEquals(1, output.split("must end with a semicolon", -1).length - 1);
+      assertTrue(output.contains("Unexpected semicolon in SQL statement."));
+      assertTrue(output.contains("Timing is on."));
+      assertTrue(output.contains("Timing is off."));
+      assertTrue(output.contains("Deleted 1 row(s)."));
+      assertTrue(output.contains("(empty)"));
       assertTrue(output.contains("Bye!"));
     }
+  }
+
+  @Test
+  @DisplayName("大文字表名を含むJOINの修飾列を解決する")
+  void joinWithUppercaseTableName(@TempDir Path dir) {
+    runRepl(
+        dir,
+        session(
+            "CREATE TABLE users (id INT, name VARCHAR(50));",
+            "CREATE TABLE orders (id INT, item VARCHAR(20));",
+            "INSERT INTO users VALUES (1, 'Alice');",
+            "INSERT INTO orders VALUES (1, 'apple');",
+            "SELECT Users.name, orders.item FROM Users JOIN orders ON Users.id = orders.id;",
+            "exit"));
+
+    assertTrue(getOutput().contains("{Users.name=Alice, orders.item=apple}"));
+  }
+
+  @Test
+  @DisplayName("既存のデータファイルがある場合はスキップして続行")
+  void orphanFileErrorDoesNotEndRepl(@TempDir Path dir) throws IOException {
+    Files.createFile(dir.resolve("ghost.db"));
+    runRepl(dir, session("CREATE TABLE ghost (id INT);", "CREATE TABLE valid (id INT);", "exit"));
+
+    String output = getOutput();
+    assertTrue(output.contains("Error: Data file already exists for new table: ghost.db"));
+    assertTrue(output.contains("Table created: valid"));
+    assertTrue(output.contains("Bye!"));
   }
 }

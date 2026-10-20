@@ -1,4 +1,4 @@
-package customdb.chapter05.DB;
+package customdb.minidbchap5.table;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -10,9 +10,13 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 public class Catalog {
+  private static final String CATALOG_FILE = "catalog.txt";
+
   private final Path baseDir;
   private final Path catalogPath;
 
@@ -21,7 +25,7 @@ public class Catalog {
 
   public Catalog(Path baseDir) throws IOException {
     this.baseDir = baseDir;
-    this.catalogPath = baseDir.resolve("catalog.txt");
+    this.catalogPath = baseDir.resolve(CATALOG_FILE);
 
     if (!Files.exists(baseDir)) {
       Files.createDirectories(baseDir);
@@ -37,12 +41,19 @@ public class Catalog {
       throw new IllegalArgumentException("Table already exists: " + schema.getTableName());
     }
 
+    for (Schema.Column column : schema.getColumns()) {
+      validateIdentifier("Column name", column.name());
+    }
+
     Path tablePath = getTablePath(tableName);
 
-    Table table = new Table(schema, tablePath);
+    // カタログに無いファイルの確認
+    if (Files.exists(tablePath)) {
+      throw new IllegalStateException(
+          "Data file already exists for new table: " + tablePath.getFileName());
+    }
 
-    // 新規作成時は既存データを消して初期化
-    table.truncate();
+    Table table = new Table(schema, tablePath);
 
     schemas.put(tableName, schema);
     tables.put(tableName, table);
@@ -116,11 +127,13 @@ public class Catalog {
         Schema schema = parseSchemaLine(line);
         String tableName = normalize(schema.getTableName());
 
-        Path tablePath = getTablePath(tableName);
-        Table table = new Table(schema, tablePath);
-
         schemas.put(tableName, schema);
-        tables.put(tableName, table);
+
+        // ファイルがある場合のみデータ登録
+        Path tablePath = getTablePath(tableName);
+        if (Files.exists(tablePath)) {
+          tables.put(tableName, new Table(schema, tablePath));
+        }
       }
     }
   }
@@ -130,7 +143,7 @@ public class Catalog {
       Files.createDirectories(baseDir);
     }
 
-    Path tempPath = baseDir.resolve("catalog.txt.tmp");
+    Path tempPath = baseDir.resolve(CATALOG_FILE + ".tmp");
     try (BufferedWriter writer = Files.newBufferedWriter(tempPath, StandardCharsets.UTF_8)) {
       for (Schema schema : schemas.values()) {
         writer.write(toSchemaLine(schema));
@@ -146,9 +159,7 @@ public class Catalog {
     List<String> columnTexts = new ArrayList<>();
 
     for (Schema.Column column : schema.getColumns()) {
-      String columnText = column.name() + ":" + column.type().name() + ":" + column.length();
-
-      columnTexts.add(columnText);
+      columnTexts.add(column.name() + ":" + column.type().name() + ":" + column.length());
     }
 
     return schema.getTableName() + "|" + String.join(",", columnTexts);
@@ -177,21 +188,37 @@ public class Catalog {
         }
 
         String columnName = columnParts[0];
-        Schema.DataType type = Schema.DataType.valueOf(columnParts[1].toUpperCase());
+
+        validateIdentifier("Table name", tableName);
+        validateIdentifier("Column name", columnName);
+
+        Schema.DataType type = Schema.DataType.valueOf(columnParts[1].toUpperCase(Locale.ROOT));
         int length = Integer.parseInt(columnParts[2]);
 
         columns.add(new Schema.Column(columnName, type, length));
       }
     }
 
+    validateIdentifier("Table name", tableName);
+
     return new Schema(tableName, columns);
   }
 
   private Path getTablePath(String tableName) {
-    return baseDir.resolve(normalize(tableName) + ".tbl");
+    return baseDir.resolve(normalize(tableName) + ".db");
   }
 
   private String normalize(String tableName) {
-    return tableName.toLowerCase();
+    validateIdentifier("Table name", tableName);
+    return tableName.toLowerCase(Locale.ROOT);
+  }
+
+  // 有効な名前かチェックするメソッドを追加
+  private void validateIdentifier(String kind, String identifier) {
+    if (identifier == null
+        || !Pattern.compile("[A-Za-z_][A-Za-z0-9_]*").matcher(identifier).matches()) {
+      throw new IllegalArgumentException(
+          kind + " must be a safe ASCII identifier [A-Za-z_][A-Za-z0-9_]*: " + identifier);
+    }
   }
 }

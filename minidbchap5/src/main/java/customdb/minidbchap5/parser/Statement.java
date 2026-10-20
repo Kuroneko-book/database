@@ -1,6 +1,6 @@
-package customdb.chapter05.Parser;
+package customdb.minidbchap5.parser;
 
-import customdb.chapter05.DB.Schema.Column;
+import customdb.minidbchap5.table.Schema.Column;
 import java.util.List;
 
 public interface Statement {

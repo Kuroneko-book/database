@@ -1,11 +1,10 @@
-package customdb.chapter05.DB;
+package customdb.minidbchap5.table;
 
 import java.util.List;
 
 public class Schema {
   private final String tableName;
   private final List<Column> columns;
-  private static final int RECORD_HEADER_SIZE = 1;
 
   public Schema(String tableName, List<Column> columns) {
     this.tableName = tableName;
@@ -29,30 +28,7 @@ public class Schema {
     return null;
   }
 
-  public int getRecordSize() {
-    int size = RECORD_HEADER_SIZE;
-
-    for (Column column : columns) {
-      size += column.size();
-    }
-
-    return size;
-  }
-
-  public int getMaxSlots(int pageSize) {
-    return pageSize / getRecordSize();
-  }
-
   public record Column(String name, DataType type, int length) {
-
-    public int size() {
-      return switch (type) {
-        case INTEGER -> 4;
-        case FLOAT -> 4;
-        case DOUBLE -> 8;
-        case STRING -> 4 + length;
-      };
-    }
 
     public boolean isIndexed() {
       return name.equalsIgnoreCase("id");

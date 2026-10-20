@@ -1,18 +1,18 @@
 package customdb.minidbchap5.db;
 
+import customdb.minidbchap5.executor.QueryExecutor;
 import customdb.minidbchap5.parser.SimpleParser;
-import customdb.minidbchap5.storage.PageManager;
-import customdb.minidbchap5.storage.Record;
+import customdb.minidbchap5.parser.Statement;
 import java.io.IOException;
-import java.util.List;
+import java.nio.file.Path;
 import java.util.Scanner;
 
 public class MiniDB implements AutoCloseable {
-  private static final String DATA_PATH = "data/mini.db";
+  private static final String DATA_PATH = "data";
 
   private final Scanner scanner;
   private final SimpleParser parser;
-  private PageManager pageManager;
+  private final QueryExecutor executor;
 
   public MiniDB() {
     this(DATA_PATH);
@@ -21,120 +21,28 @@ public class MiniDB implements AutoCloseable {
   public MiniDB(String dataPathStr) {
     this.scanner = new Scanner(System.in);
     this.parser = new SimpleParser();
+    QueryExecutor created = null;
     try {
-      this.pageManager = new PageManager(dataPathStr);
+      created = new QueryExecutor(Path.of(dataPathStr));
     } catch (IOException e) {
       System.out.println("Failed to initialize database: " + e.getMessage());
     }
+    this.executor = created;
     System.out.println("Welcome to minidb!");
-  }
-
-  private Integer parseKey(String key) {
-    try {
-      return Integer.parseInt(key);
-    } catch (NumberFormatException e) {
-      System.out.println("Error: Key must be an integer.");
-      return null;
-    }
-  }
-
-  public void insert(String key, String value) {
-    if (parseKey(key) == null) {
-      return;
-    }
-
-    try {
-      if (pageManager.findRecord(key) != null) {
-        System.out.println("Key already exists. Use update command to modify.");
-        return;
-      }
-
-      pageManager.insertRecord(key, value);
-      System.out.println("Inserted and saved to disk.");
-
-    } catch (IllegalArgumentException e) {
-      System.out.println("Insert Error: " + e.getMessage());
-    } catch (IOException e) {
-      System.out.println("Disk I/O Error during insert.");
-    }
-  }
-
-  public void select() {
-    try {
-      List<Record> records = pageManager.findAllRecords();
-      for (Record record : records) {
-        System.out.println("(" + record.key() + ", " + record.value() + ")");
-      }
-    } catch (IOException e) {
-      System.out.println("Disk I/O Error during select.");
-    }
-  }
-
-  public void select(String key) {
-    if (parseKey(key) == null) {
-      return;
-    }
-
-    try {
-      Record record = pageManager.findRecord(key);
-      if (record != null) {
-        System.out.println(record.value());
-      } else {
-        System.out.println("Record not found.");
-      }
-    } catch (IOException e) {
-      System.out.println("Disk I/O Error during select.");
-    }
-  }
-
-  public void update(String key, String value) {
-    if (parseKey(key) == null) {
-      return;
-    }
-
-    try {
-      boolean updated = pageManager.updateRecordByKey(key, value);
-      if (updated) {
-        System.out.println("Updated and saved to disk.");
-      } else {
-        System.out.println("Record not found.");
-      }
-    } catch (IllegalArgumentException e) {
-      System.out.println("Update Error: " + e.getMessage());
-    } catch (IOException e) {
-      System.out.println("Disk I/O Error during update.");
-    }
-  }
-
-  public void delete(String key) {
-    if (parseKey(key) == null) {
-      return;
-    }
-
-    try {
-      boolean deleted = pageManager.deleteRecordByKey(key);
-      if (deleted) {
-        System.out.println("Deleted and saved to disk.");
-      } else {
-        System.out.println("Record not found.");
-      }
-    } catch (IOException e) {
-      System.out.println("Disk I/O Error during delete.");
-    }
   }
 
   @Override
   public void close() {
     try {
-      if (pageManager != null) {
-        pageManager.close();
+      if (executor != null) {
+        executor.close();
       }
     } catch (IOException ignored) {
     }
   }
 
   public void start() {
-    if (pageManager == null) {
+    if (executor == null) {
       System.out.println("Database is not initialized.");
       return;
     }
@@ -147,33 +55,29 @@ public class MiniDB implements AutoCloseable {
         break;
       }
 
-      String[] tokens = parser.parse(scanner.nextLine());
-      String command = parser.getCommand(tokens);
+      String line = scanner.nextLine();
 
       long startTime = System.nanoTime();
 
-      if (command.isEmpty()) {
+      if (line.isEmpty()) {
         continue;
-      } else if (command.equals("time")) {
+      } else if (line.equals("time")) {
         showTime = !showTime;
         System.out.println("Timing is " + (showTime ? "on." : "off."));
         continue;
-      } else if (command.equals("insert") && tokens.length == 3) {
-        insert(tokens[1], tokens[2]);
-      } else if (command.equals("select")) {
-        if (tokens.length == 1) select();
-        else if (tokens.length == 2) select(tokens[1]);
-        else System.out.println("Unknown command");
-      } else if (command.equals("update") && tokens.length == 3) {
-        update(tokens[1], tokens[2]);
-      } else if (command.equals("delete") && tokens.length == 2) {
-        delete(tokens[1]);
-      } else if (command.equals("exit")) {
+      } else if (line.equals("exit")) {
         close();
         System.out.println("Bye!");
         break;
-      } else {
-        System.out.println("Unknown command");
+      }
+
+      try {
+        Statement statement = parser.parseStatement(line);
+        executor.execute(statement);
+      } catch (RuntimeException e) {
+        System.out.println("Error: " + e.getMessage());
+      } catch (IOException e) {
+        System.out.println("Disk I/O Error during command.");
       }
 
       if (showTime) {
