@@ -70,9 +70,11 @@ public class QueryExecutor implements AutoCloseable {
         colName = colName.substring(colName.lastIndexOf('.') + 1);
       }
       Schema.Column col = leftSchema.getColumn(colName);
-      if (col != null && col.isIndexed() && leftTable.hasIndex(col.name())) {
-        Object rawVal = resolveColumnOrLiteral(new Row(), condition.right());
-        Object searchVal = parseValue(rawVal.toString(), col);
+      if (col != null
+          && col.isIndexed()
+          && leftTable.hasIndex(col.name())
+          && leftSchema.getColumn(condition.right()) == null) {
+        Object searchVal = parseValue(condition.right(), col);
         rows.addAll(leftTable.searchByIndex(col.name(), searchVal));
         usedIndex = true;
       }
