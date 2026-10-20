@@ -5,10 +5,24 @@ import java.util.List;
 public class Schema {
   private final String tableName;
   private final List<Column> columns;
+  private final Column primaryKeyColumn;
 
   public Schema(String tableName, List<Column> columns) {
     this.tableName = tableName;
     this.columns = columns;
+    Column primaryKey = null;
+    for (Column column : columns) {
+      if (column.primaryKey()) {
+        if (primaryKey != null) {
+          throw new IllegalArgumentException("Only one PRIMARY KEY column is supported.");
+        }
+        primaryKey = column;
+      }
+    }
+    if (primaryKey == null) {
+      throw new IllegalArgumentException("PRIMARY KEY is required for table: " + tableName);
+    }
+    this.primaryKeyColumn = primaryKey;
   }
 
   public String getTableName() {
@@ -17,6 +31,10 @@ public class Schema {
 
   public List<Column> getColumns() {
     return columns;
+  }
+
+  public Column primaryKeyColumn() {
+    return primaryKeyColumn;
   }
 
   public Column getColumn(String columnName) {
@@ -28,10 +46,14 @@ public class Schema {
     return null;
   }
 
-  public record Column(String name, DataType type, int length) {
+  public record Column(String name, DataType type, int length, boolean primaryKey) {
+
+    public Column(String name, DataType type, int length) {
+      this(name, type, length, false);
+    }
 
     public boolean isIndexed() {
-      return name.equalsIgnoreCase("id");
+      return primaryKey;
     }
   }
 

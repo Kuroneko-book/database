@@ -52,6 +52,25 @@ public class MiniDBTest {
     }
   }
 
+  @Test
+  @DisplayName("主キー重複のチェック")
+  void duplicatePrimaryKeyDoesNotEndRepl(@TempDir Path dir) {
+    runRepl(
+        dir,
+        session(
+            "CREATE TABLE users (id INT PRIMARY KEY, name STRING(100));",
+            "INSERT INTO users VALUES (1, 'Alice');",
+            "INSERT INTO users VALUES (1, 'duplicate');",
+            "SELECT * FROM users;",
+            "exit"));
+
+    String output = getOutput();
+    assertTrue(output.contains("Error: Duplicate primary key: 1"));
+    assertEquals(1, output.split("Inserted into users:", -1).length - 1);
+    assertTrue(output.contains("{id=1, name=Alice}"));
+    assertTrue(output.contains("Bye!"));
+  }
+
   @Nested
   @DisplayName("SQLのテスト")
   class SqlLifecycleTest {
@@ -61,7 +80,7 @@ public class MiniDBTest {
       runRepl(
           dir,
           session(
-              "CREATE TABLE users (id int, name varchar(50), score double);",
+              "CREATE TABLE users (id int PRIMARY KEY, name varchar(50), score double);",
               "INSERT INTO users VALUES (1, 'Alice', 3.5);",
               "INSERT INTO users (id, name, score) VALUES (2, 'Bob', 1.25);",
               "SELECT * FROM users;",
@@ -69,7 +88,7 @@ public class MiniDBTest {
               "UPDATE users SET score = 9.5 WHERE name = 'Alice';",
               "UPDATE users SET id = 10 WHERE name = 'Alice';",
               "SELECT * FROM users WHERE id = 10;",
-              "CREATE TABLE orders (id int, item varchar(20), price float);",
+              "CREATE TABLE orders (id int PRIMARY KEY, item varchar(20), price float);",
               "INSERT INTO orders VALUES (10, 'apple', 100.5);",
               "INSERT INTO orders VALUES (2, 'banana', 200.5);",
               "SELECT users.name, orders.item FROM users JOIN orders ON users.id = orders.id;",
@@ -115,7 +134,7 @@ public class MiniDBTest {
       runRepl(
           dir,
           session(
-              "CREATE TABLE t (id int, name varchar(50));",
+              "CREATE TABLE t (id int PRIMARY KEY, name varchar(50));",
               "INSERT INTO t VALUES (1, 'a;b');", // クォートで囲まれたセミコロンは文字列として認識
               "SELECT * FROM t;",
               "SELECT * FROM t",
@@ -147,8 +166,8 @@ public class MiniDBTest {
     runRepl(
         dir,
         session(
-            "CREATE TABLE users (id INT, name VARCHAR(50));",
-            "CREATE TABLE orders (id INT, item VARCHAR(20));",
+            "CREATE TABLE users (id INT PRIMARY KEY, name VARCHAR(50));",
+            "CREATE TABLE orders (id INT PRIMARY KEY, item VARCHAR(20));",
             "INSERT INTO users VALUES (1, 'Alice');",
             "INSERT INTO orders VALUES (1, 'apple');",
             "SELECT Users.name, orders.item FROM Users JOIN orders ON Users.id = orders.id;",
@@ -161,7 +180,12 @@ public class MiniDBTest {
   @DisplayName("既存のデータファイルがある場合はスキップして続行")
   void orphanFileErrorDoesNotEndRepl(@TempDir Path dir) throws IOException {
     Files.createFile(dir.resolve("ghost.db"));
-    runRepl(dir, session("CREATE TABLE ghost (id INT);", "CREATE TABLE valid (id INT);", "exit"));
+    runRepl(
+        dir,
+        session(
+            "CREATE TABLE ghost (id INT PRIMARY KEY);",
+            "CREATE TABLE valid (id INT PRIMARY KEY);",
+            "exit"));
 
     String output = getOutput();
     assertTrue(output.contains("Error: Data file already exists for new table: ghost.db"));

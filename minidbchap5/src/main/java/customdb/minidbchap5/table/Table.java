@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -21,8 +20,8 @@ public class Table implements AutoCloseable {
   private final Schema schema;
   private final PageManager pageManager;
 
-  // 索引は id カラムのみ: id値 -> 同値を持つ行の surrogate key のリスト
-  private final Map<String, Map<Object, List<Long>>> indexes = new HashMap<>();
+  // 主キーの値 -> 行の内部キー
+  private final Map<Object, Long> primaryIndex = new HashMap<>();
 
   // 既存レコードの最大内部キー（空テーブルなら 0）。insert 時に +1 して採番する。
   private long maxKey;
@@ -45,20 +44,15 @@ public class Table implements AutoCloseable {
 
   // open時に既存レコードから内部キーの最大値と索引を再構築する
   private void loadExistingRecords() throws IOException {
-    for (Schema.Column column : schema.getColumns()) {
-      if (column.isIndexed()) {
-        indexes.put(column.name(), new HashMap<>());
-      }
-    }
-
     for (var storageRecord : pageManager.findAllRecords()) {
       Long key = decodeKey(storageRecord.key());
       Row row = RowCodec.decode(schema, storageRecord.value());
       if (key != null) {
+        checkPrimaryKey(row, null);
         if (key > maxKey) {
           maxKey = key;
         }
-        addToIndexes(key, row);
+        primaryIndex.put(row.get(schema.primaryKeyColumn().name()), key);
       }
     }
   }
@@ -72,13 +66,14 @@ public class Table implements AutoCloseable {
   }
 
   public void insert(Row row) throws IOException {
+    checkPrimaryKey(row, null);
     long key = maxKey + 1;
     byte[] value = RowCodec.encode(schema, row);
 
     pageManager.insertRecord(Long.toString(key), value);
 
     maxKey = key;
-    addToIndexes(key, row);
+    primaryIndex.put(row.get(schema.primaryKeyColumn().name()), key);
   }
 
   public List<Row> scan() throws IOException {
@@ -116,12 +111,14 @@ public class Table implements AutoCloseable {
     }
     Row oldRow = RowCodec.decode(schema, oldRecord.value());
 
+    checkPrimaryKey(row, recordId.key());
+
     if (!pageManager.updateRecordByKey(key, RowCodec.encode(schema, row))) {
       throw new IllegalArgumentException("Record not found: " + recordId.key());
     }
 
-    removeFromIndexes(recordId.key(), oldRow);
-    addToIndexes(recordId.key(), row);
+    primaryIndex.remove(oldRow.get(schema.primaryKeyColumn().name()));
+    primaryIndex.put(row.get(schema.primaryKeyColumn().name()), recordId.key());
   }
 
   public void delete(RecordId recordId) throws IOException {
@@ -134,7 +131,7 @@ public class Table implements AutoCloseable {
 
     Row oldRow = RowCodec.decode(schema, oldRecord.value());
     pageManager.deleteRecordByKey(key);
-    removeFromIndexes(recordId.key(), oldRow);
+    primaryIndex.remove(oldRow.get(schema.primaryKeyColumn().name()));
   }
 
   public Row getRecord(RecordId recordId) throws IOException {
@@ -143,78 +140,40 @@ public class Table implements AutoCloseable {
   }
 
   public List<Row> searchByIndex(String column, Object value) {
-    Map<Object, List<Long>> index = indexFor(column);
-
-    List<Long> keys = new ArrayList<>(index.getOrDefault(value, List.of()));
-    Collections.sort(keys);
-
-    List<Row> rows = new ArrayList<>();
-    for (Long key : keys) {
-      try {
-        Row row = getRecord(new RecordId(key));
-        if (row != null) {
-          rows.add(row);
-        }
-      } catch (IOException e) {
-        throw new UncheckedIOException("Failed to read record for key: " + key, e);
-      }
-    }
-
-    return rows;
-  }
-
-  private Map<Object, List<Long>> indexFor(String column) {
     if (!hasIndex(column)) {
       throw new IllegalStateException("No index found for column: " + column);
     }
-
-    return indexes.get(findIndexedColumn(column).name());
+    Long key = primaryIndex.get(value);
+    if (key == null) {
+      return List.of();
+    }
+    try {
+      Row row = getRecord(new RecordId(key));
+      return row == null ? List.of() : List.of(row);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Failed to read record for key: " + key, e);
+    }
   }
 
   public boolean hasIndex(String column) {
-    Schema.Column indexed = findIndexedColumn(column);
-    return indexed != null && indexes.containsKey(indexed.name());
-  }
-
-  private Schema.Column findIndexedColumn(String column) {
-    Schema.Column target = schema.getColumn(column);
-    if (target == null || !target.isIndexed()) {
-      return null;
-    }
-    return target;
-  }
-
-  private void addToIndexes(long key, Row row) {
-    for (Schema.Column column : schema.getColumns()) {
-      if (!column.isIndexed()) {
-        continue;
-      }
-
-      Object value = row.get(column.name());
-      indexes.get(column.name()).computeIfAbsent(value, ignored -> new ArrayList<>()).add(key);
-    }
-  }
-
-  private void removeFromIndexes(long key, Row oldRow) {
-    for (Schema.Column column : schema.getColumns()) {
-      if (!column.isIndexed()) {
-        continue;
-      }
-
-      Object value = oldRow.get(column.name());
-      List<Long> keys = indexes.get(column.name()).get(value);
-
-      if (keys != null) {
-        keys.remove((Long) key);
-        if (keys.isEmpty()) {
-          indexes.get(column.name()).remove(value);
-        }
-      }
-    }
+    Schema.Column indexed = schema.getColumn(column);
+    return indexed != null && indexed.primaryKey();
   }
 
   private String encodeKey(RecordId recordId) {
     return Long.toString(recordId.key());
+  }
+
+  private void checkPrimaryKey(Row row, Long currentKey) {
+    Schema.Column primaryKey = schema.primaryKeyColumn();
+    Object value = row.get(primaryKey.name());
+    if (value == null) {
+      throw new IllegalArgumentException("Primary key value is required: " + primaryKey.name());
+    }
+    Long existingKey = primaryIndex.get(value);
+    if (existingKey != null && !existingKey.equals(currentKey)) {
+      throw new IllegalArgumentException("Duplicate primary key: " + value);
+    }
   }
 
   @Override

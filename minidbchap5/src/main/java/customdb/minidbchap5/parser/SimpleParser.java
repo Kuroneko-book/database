@@ -226,7 +226,14 @@ public class SimpleParser {
         index++;
       }
 
-      columns.add(new Schema.Column(columnName, type, length));
+      boolean primaryKey = false;
+      if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "primary")) {
+        expect(tokens, index + 1, "key");
+        primaryKey = true;
+        index += 2;
+      }
+
+      columns.add(new Schema.Column(columnName, type, length, primaryKey));
 
       if (index < tokens.size() && tokens.get(index).equals(",")) {
         index++;

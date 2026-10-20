@@ -115,22 +115,26 @@ public class QueryExecutor implements AutoCloseable {
 
     Object newValue = parseValue(statement.value(), targetColumn);
 
-    int updatedCount = 0;
-
+    List<Table.Record> matched = new ArrayList<>();
     for (Table.Record record : table.scanRecords()) {
-      Row row = record.row();
-
-      if (matches(row, statement.whereCondition())) {
-        // 行は全列を持っているので、該当列だけ差し替えて更新する
-        Row updated = new Row();
-        updated.putAll(row);
-        updated.put(targetColumn.name(), newValue);
-        table.update(record.recordId(), updated);
-        updatedCount++;
+      if (matches(record.row(), statement.whereCondition())) {
+        matched.add(record);
       }
     }
 
-    System.out.println("Updated " + updatedCount + " row(s).");
+    // UPDATEである値を複数行の主キーに設定する場合、主キーが重複するためはじく
+    if (targetColumn.primaryKey() && matched.size() > 1) {
+      throw new IllegalArgumentException("Duplicate primary key: " + newValue);
+    }
+
+    for (Table.Record record : matched) {
+      Row updated = new Row();
+      updated.putAll(record.row());
+      updated.put(targetColumn.name(), newValue);
+      table.update(record.recordId(), updated);
+    }
+
+    System.out.println("Updated " + matched.size() + " row(s).");
   }
 
   private void executeDelete(Statement.Delete statement) throws IOException {
@@ -188,6 +192,21 @@ public class QueryExecutor implements AutoCloseable {
 
     List<String> columnNames = statement.columnNames();
     List<String> values = statement.values();
+
+    Schema.Column primaryKey = schema.primaryKeyColumn();
+    if (!columnNames.isEmpty()) {
+      boolean supplied = false;
+      for (String columnName : columnNames) {
+        if (columnName.equalsIgnoreCase(primaryKey.name())) {
+          supplied = true;
+          break;
+        }
+      }
+      if (!supplied) {
+        throw new IllegalArgumentException(
+            "Primary key column must be specified: " + primaryKey.name());
+      }
+    }
 
     if (columnNames.isEmpty()) {
       if (values.size() != schema.getColumns().size()) {

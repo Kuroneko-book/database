@@ -159,7 +159,14 @@ public class Catalog {
     List<String> columnTexts = new ArrayList<>();
 
     for (Schema.Column column : schema.getColumns()) {
-      columnTexts.add(column.name() + ":" + column.type().name() + ":" + column.length());
+      columnTexts.add(
+          column.name()
+              + ":"
+              + column.type().name()
+              + ":"
+              + column.length()
+              + ":"
+              + (column.primaryKey() ? "1" : "0"));
     }
 
     return schema.getTableName() + "|" + String.join(",", columnTexts);
@@ -181,9 +188,9 @@ public class Catalog {
       String[] columnTexts = columnsPart.split(",");
 
       for (String columnText : columnTexts) {
-        String[] columnParts = columnText.split(":", 3);
+        String[] columnParts = columnText.split(":", 4);
 
-        if (columnParts.length != 3) {
+        if (columnParts.length != 4) {
           throw new IllegalArgumentException("Invalid column definition: " + columnText);
         }
 
@@ -194,8 +201,11 @@ public class Catalog {
 
         Schema.DataType type = Schema.DataType.valueOf(columnParts[1].toUpperCase(Locale.ROOT));
         int length = Integer.parseInt(columnParts[2]);
+        if (!columnParts[3].equals("0") && !columnParts[3].equals("1")) {
+          throw new IllegalArgumentException("Invalid primary key flag: " + columnText);
+        }
 
-        columns.add(new Schema.Column(columnName, type, length));
+        columns.add(new Schema.Column(columnName, type, length, columnParts[3].equals("1")));
       }
     }
 
