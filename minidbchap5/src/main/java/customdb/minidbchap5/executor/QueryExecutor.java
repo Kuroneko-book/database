@@ -403,6 +403,10 @@ public class QueryExecutor implements AutoCloseable {
 
   // 右辺の値を、リテラル値またはカラム名として解決する（where age >= 20 or join on users.id = orders.user_id）
   private Object resolveColumnOrLiteral(Row row, String value) {
+    // クォートで囲まれた値は文字列として扱う
+    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
+      return stripQuote(value);
+    }
     try {
       return resolveColumn(row, value);
     } catch (IllegalArgumentException ignored) {
