@@ -1,6 +1,6 @@
-package customdb.chapter06.Executor;
+package customdb.minidbchap6.executor;
 
-import customdb.chapter06.Parser.Statement;
+import customdb.minidbchap6.parser.Statement;
 import java.io.IOException;
 
 public interface ExecutionContext {

@@ -1,5 +1,6 @@
 package customdb.minidbchap6.table;
 
+import customdb.minidbchap6.index.BPlusTree;
 import customdb.minidbchap6.storage.PageManager;
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -22,6 +23,7 @@ public class Table implements AutoCloseable {
 
   // 主キーの値 -> 行の内部キー
   private final Map<Object, Long> primaryIndex = new HashMap<>();
+  private final BPlusTree rangeIndex;
 
   // 既存レコードの最大内部キー（空テーブルなら 0）。insert 時に +1 して採番する。
   private long maxKey;
@@ -29,6 +31,11 @@ public class Table implements AutoCloseable {
   public Table(Schema schema, Path path) throws IOException {
     this.schema = schema;
     this.pageManager = new PageManager(path.toString());
+    if (schema.primaryKeyColumn().type() == Schema.DataType.INTEGER) {
+      this.rangeIndex = new BPlusTree();
+    } else {
+      this.rangeIndex = null;
+    }
 
     try {
       loadExistingRecords();
@@ -52,7 +59,11 @@ public class Table implements AutoCloseable {
         if (key > maxKey) {
           maxKey = key;
         }
-        primaryIndex.put(row.get(schema.primaryKeyColumn().name()), key);
+        Object primaryValue = row.get(schema.primaryKeyColumn().name());
+        primaryIndex.put(primaryValue, key);
+        if (rangeIndex != null) {
+          rangeIndex.put((Integer) primaryValue, key);
+        }
       }
     }
   }
@@ -73,7 +84,9 @@ public class Table implements AutoCloseable {
     pageManager.insertRecord(Long.toString(key), value);
 
     maxKey = key;
-    primaryIndex.put(row.get(schema.primaryKeyColumn().name()), key);
+    Object primaryValue = row.get(schema.primaryKeyColumn().name());
+    primaryIndex.put(primaryValue, key);
+    if (rangeIndex != null) rangeIndex.put((Integer) primaryValue, key);
   }
 
   public List<Row> scan() throws IOException {
@@ -117,8 +130,14 @@ public class Table implements AutoCloseable {
       throw new IllegalArgumentException("Record not found: " + recordId.key());
     }
 
-    primaryIndex.remove(oldRow.get(schema.primaryKeyColumn().name()));
-    primaryIndex.put(row.get(schema.primaryKeyColumn().name()), recordId.key());
+    Object oldPrimary = oldRow.get(schema.primaryKeyColumn().name());
+    Object newPrimary = row.get(schema.primaryKeyColumn().name());
+    primaryIndex.remove(oldPrimary);
+    primaryIndex.put(newPrimary, recordId.key());
+    if (rangeIndex != null && !oldPrimary.equals(newPrimary)) {
+      rangeIndex.delete((Integer) oldPrimary);
+      rangeIndex.put((Integer) newPrimary, recordId.key());
+    }
   }
 
   public void delete(RecordId recordId) throws IOException {
@@ -131,12 +150,17 @@ public class Table implements AutoCloseable {
 
     Row oldRow = RowCodec.decode(schema, oldRecord.value());
     pageManager.deleteRecordByKey(key);
-    primaryIndex.remove(oldRow.get(schema.primaryKeyColumn().name()));
+    Object oldPrimary = oldRow.get(schema.primaryKeyColumn().name());
+    primaryIndex.remove(oldPrimary);
+    if (rangeIndex != null) rangeIndex.delete((Integer) oldPrimary);
   }
 
   public Row getRecord(RecordId recordId) throws IOException {
     var record = pageManager.findRecord(encodeKey(recordId));
-    return record == null ? null : RowCodec.decode(schema, record.value());
+    if (record == null) {
+      return null;
+    }
+    return RowCodec.decode(schema, record.value());
   }
 
   public List<Row> searchByIndex(String column, Object value) {
@@ -149,10 +173,29 @@ public class Table implements AutoCloseable {
     }
     try {
       Row row = getRecord(new RecordId(key));
-      return row == null ? List.of() : List.of(row);
+      if (row == null) {
+        return List.of();
+      }
+      return List.of(row);
     } catch (IOException e) {
       throw new UncheckedIOException("Failed to read record for key: " + key, e);
     }
+  }
+
+  public List<Row> searchRangeByIndex(String column, int value, String operator) {
+    if (!hasIndex(column) || rangeIndex == null) {
+      throw new IllegalStateException("No integer range index for column: " + column);
+    }
+    List<Row> rows = new ArrayList<>();
+    for (Long key : rangeIndex.range(value, operator)) {
+      try {
+        Row row = getRecord(new RecordId(key));
+        if (row != null) rows.add(row);
+      } catch (IOException e) {
+        throw new UncheckedIOException("Failed to read record for key: " + key, e);
+      }
+    }
+    return rows;
   }
 
   public boolean hasIndex(String column) {

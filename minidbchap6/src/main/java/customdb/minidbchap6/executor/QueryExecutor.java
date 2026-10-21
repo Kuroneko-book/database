@@ -1,5 +1,7 @@
 package customdb.minidbchap6.executor;
 
+import customdb.minidbchap6.Plan.Plan;
+import customdb.minidbchap6.Planner.Planner;
 import customdb.minidbchap6.parser.Statement;
 import customdb.minidbchap6.table.Catalog;
 import customdb.minidbchap6.table.Row;
@@ -12,8 +14,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 
-public class QueryExecutor implements AutoCloseable {
+public class QueryExecutor implements AutoCloseable, ExecutionContext {
   private final Catalog catalog;
+  private final Planner planner = new Planner();
 
   public QueryExecutor(Path baseDir) throws IOException {
     this.catalog = new Catalog(baseDir);
@@ -56,40 +59,55 @@ public class QueryExecutor implements AutoCloseable {
   }
 
   private void executeSelect(Statement.Select statement) throws IOException {
+    Schema schema = catalog.requireSchema(statement.tableName());
+    Plan plan = planner.createPlan(statement, schema);
+    plan.execute(this, statement);
+  }
+
+  @Override
+  public void executeSeqScan(Statement.Select statement) throws IOException {
     Table leftTable = catalog.requireTable(statement.tableName());
     Schema leftSchema = catalog.requireSchema(statement.tableName());
-
     List<Row> rows = new ArrayList<>();
-    boolean usedIndex = false;
-    Statement.Condition condition = statement.whereCondition();
     boolean hasJoin = statement.joinClause() != null;
 
-    if (!hasJoin && condition != null && condition.operator().equals("=")) {
-      String colName = condition.left();
-      if (colName.contains(".")) {
-        colName = colName.substring(colName.lastIndexOf('.') + 1);
-      }
-      Schema.Column col = leftSchema.getColumn(colName);
-      if (col != null
-          && col.isIndexed()
-          && leftTable.hasIndex(col.name())
-          && leftSchema.getColumn(condition.right()) == null) {
-        Object searchVal = parseValue(condition.right(), col);
-        rows.addAll(leftTable.searchByIndex(col.name(), searchVal));
-        usedIndex = true;
+    for (Row row : leftTable.scan()) {
+      if (hasJoin) {
+        rows.add(qualifyRow(statement.tableName(), leftSchema, row));
+      } else {
+        rows.add(row);
       }
     }
 
-    if (!usedIndex) {
-      for (Row row : leftTable.scan()) {
-        if (statement.joinClause() == null) {
-          rows.add(row);
-        } else {
-          rows.add(qualifyRow(statement.tableName(), leftSchema, row));
-        }
+    printSelectedRows(rows, statement);
+  }
+
+  @Override
+  public void executeIndexScan(Statement.Select statement) throws IOException {
+    Table table = catalog.requireTable(statement.tableName());
+    Schema schema = catalog.requireSchema(statement.tableName());
+    Statement.Condition condition = statement.whereCondition();
+    Schema.Column column = schema.getColumn(condition.left());
+    Object value = parseValue(condition.right(), column);
+
+    List<Row> rows =
+        condition.operator().equals("=")
+            ? table.searchByIndex(column.name(), value)
+            : table.searchRangeByIndex(column.name(), (Integer) value, condition.operator());
+
+    if (statement.joinClause() != null) {
+      List<Row> qualified = new ArrayList<>();
+      for (Row row : rows) {
+        qualified.add(qualifyRow(statement.tableName(), schema, row));
       }
+      rows = qualified;
     }
 
+    printSelectedRows(rows, statement);
+  }
+
+  private void printSelectedRows(List<Row> rows, Statement.Select statement) throws IOException {
+    boolean hasJoin = statement.joinClause() != null;
     if (hasJoin) {
       rows = executeJoin(rows, statement.joinClause());
     }
@@ -429,6 +447,10 @@ public class QueryExecutor implements AutoCloseable {
   private int compare(Object left, Object right) {
     if (left instanceof Number && right instanceof Number) {
       return Double.compare(toDouble(left), toDouble(right));
+    }
+    // 左辺が数値かつ右辺がクォートで囲まれた数値の場合は、右辺を文字列ではなく数値として解釈して比較する
+    if (left instanceof Number && right instanceof String text && isDouble(text)) {
+      return Double.compare(toDouble(left), Double.parseDouble(text));
     }
 
     return left.toString().compareTo(right.toString());

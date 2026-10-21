@@ -1,8 +1,8 @@
-package customdb.chapter06.Plan;
+package customdb.minidbchap6.Plan;
 
-import customdb.chapter06.Executor.ExecutionContext;
-import customdb.chapter06.Parser.Statement;
-import customdb.chapter06.Parser.Statement.Condition;
+import customdb.minidbchap6.executor.ExecutionContext;
+import customdb.minidbchap6.parser.Statement;
+import customdb.minidbchap6.parser.Statement.Condition;
 import java.io.IOException;
 
 // インデックス検索を行う実行計画

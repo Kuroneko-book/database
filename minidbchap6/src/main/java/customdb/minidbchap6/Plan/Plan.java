@@ -1,7 +1,7 @@
-package customdb.chapter06.Plan;
+package customdb.minidbchap6.Plan;
 
-import customdb.chapter06.Executor.ExecutionContext;
-import customdb.chapter06.Parser.Statement;
+import customdb.minidbchap6.executor.ExecutionContext;
+import customdb.minidbchap6.parser.Statement;
 import java.io.IOException;
 
 // 実行計画のインターフェース
