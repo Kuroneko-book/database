@@ -324,4 +324,14 @@ public class Table {
 
     return idx.search(value);
   }
+
+  public List<Row> searchRangeByIndex(String column, Object value, String operator) {
+    Index idx = indexes.get(column);
+
+    if (idx == null) {
+      throw new IllegalStateException("No index found for column: " + column);
+    }
+
+    return idx.searchRange(value, operator);
+  }
 }

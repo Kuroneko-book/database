@@ -1,5 +1,5 @@
 # 実行する章のデフォルト値（コマンドラインから上書き可能）
-CHAP ?= chapter01
+CHAP ?= minidbchap1
 
 # 開発環境の起動
 up:
@@ -10,7 +10,7 @@ down:
 	docker compose down
 
 # コンテナの再構築（キャッシュ無視）
-build:
+re:
 	docker compose down
 	docker compose build --no-cache
 	docker compose up -d
@@ -35,4 +35,8 @@ check:
 insert:
 	./insert_data.sh $(CHAP)
 
-.PHONY: up down build shell run fmt check insert
+# テストの実行 (例: make test または make test CHAP=minidbchap1)
+test:
+	docker compose exec dev gradle :$(CHAP):test --rerun-tasks
+
+.PHONY: up down re shell run fmt check insert test

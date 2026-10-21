@@ -116,7 +116,7 @@ public class QueryExecutor implements ExecutionContext {
       value = parseValue(condition.right(), column);
     }
 
-    List<Row> rows = table.searchByIndex(condition.left(), value);
+    List<Row> rows = table.searchRangeByIndex(condition.left(), value, condition.operator());
     List<Row> qualifiedRows = new ArrayList<>();
 
     for (Row row : rows) {
