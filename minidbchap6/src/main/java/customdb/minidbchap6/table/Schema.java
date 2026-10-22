@@ -46,14 +46,19 @@ public class Schema {
     return null;
   }
 
-  public record Column(String name, DataType type, int length, boolean primaryKey) {
+  public record Column(
+      String name, DataType type, int length, boolean primaryKey, boolean indexed) {
 
     public Column(String name, DataType type, int length) {
-      this(name, type, length, false);
+      this(name, type, length, false, false);
+    }
+
+    public Column(String name, DataType type, int length, boolean primaryKey) {
+      this(name, type, length, primaryKey, primaryKey);
     }
 
     public boolean isIndexed() {
-      return primaryKey;
+      return primaryKey || indexed;
     }
   }
 
