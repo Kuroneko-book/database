@@ -1,14 +1,19 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.Parser.Statement.Condition;
+import customdb.minidbchap7.parser.Statement.Condition;
+import customdb.minidbchap7.table.Row;
 
 public class ConditionEvaluator {
   public static boolean matches(Row row, Condition condition) {
-    if (condition == null) return true;
+    if (condition == null) {
+      return true;
+    }
+
     Object leftValue = resolveColumn(row, condition.left());
     Object rightValue = resolveColumnOrLiteral(row, condition.right());
+
     int cmp = compare(leftValue, rightValue);
+
     return switch (condition.operator()) {
       case "=" -> cmp == 0;
       case "!=" -> cmp != 0;
@@ -21,59 +26,87 @@ public class ConditionEvaluator {
     };
   }
 
-  private static Object resolveColumn(Row row, String columnName) {
-    // 列名は大文字小文字を無視して照合する（schema.getColumn と挙動を揃える）
-    for (String key : row.keySet()) {
-      if (key.equalsIgnoreCase(columnName)) return row.get(key);
+  public static Object resolveColumn(Row row, String columnName) {
+    Object found = findColumn(row, columnName);
+    if (found == null) {
+      throw new IllegalArgumentException("Unknown column: " + columnName);
     }
+    return found;
+  }
+
+  // 列が無ければnull、同名列が複数あれば例外を返す
+  private static Object findColumn(Row row, String columnName) {
+    for (String key : row.keySet()) {
+      if (key.equalsIgnoreCase(columnName)) {
+        return row.get(key);
+      }
+    }
+
+    // 修飾名（users.id）付きの列を探す
     String suffix = "." + columnName;
     Object found = null;
     int count = 0;
+
     for (String key : row.keySet()) {
-      if (endsWithIgnoreCase(key, suffix)) {
+      if (key.length() >= suffix.length()
+          && key.regionMatches(true, key.length() - suffix.length(), suffix, 0, suffix.length())) {
         found = row.get(key);
         count++;
       }
     }
-    if (count == 1) return found;
-    if (count > 1) throw new IllegalArgumentException("Ambiguous column name: " + columnName);
-    throw new IllegalArgumentException("Unknown column: " + columnName);
-  }
 
-  private static boolean endsWithIgnoreCase(String value, String suffix) {
-    int offset = value.length() - suffix.length();
-    return offset >= 0 && value.regionMatches(true, offset, suffix, 0, suffix.length());
-  }
-
-  private static Object resolveColumnOrLiteral(Row row, String value) {
-    try {
-      return resolveColumn(row, value);
-    } catch (IllegalArgumentException ignored) {
+    if (count == 1) {
+      return found;
     }
-    if (isQuoted(value)) return stripQuote(value);
-    if (isInteger(value)) return Integer.parseInt(value);
-    if (isDouble(value)) return Double.parseDouble(value);
-    return value;
+
+    if (count > 1) {
+      throw new IllegalArgumentException("Ambiguous column name: " + columnName);
+    }
+
+    return null;
+  }
+
+  // 右辺の値を、リテラルまたはカラム名として解釈する
+  private static Object resolveColumnOrLiteral(Row row, String value) {
+    // クォートで囲まれた値は文字列として扱う
+    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
+      return ValueParser.stripQuote(value);
+    }
+    Object columnValue = findColumn(row, value);
+    if (columnValue != null) {
+      return columnValue;
+    }
+
+    String raw = ValueParser.stripQuote(value);
+
+    if (isInteger(raw)) {
+      return Integer.parseInt(raw);
+    }
+
+    if (isDouble(raw)) {
+      return Double.parseDouble(raw);
+    }
+
+    return raw;
   }
 
   private static int compare(Object left, Object right) {
     if (left instanceof Number && right instanceof Number) {
-      double l = toDouble(left);
-      double r = toDouble(right);
-      return Double.compare(l, r);
+      return Double.compare(toDouble(left), toDouble(right));
     }
-    if (left instanceof Number && isDouble(right.toString())) {
-      return Double.compare(toDouble(left), Double.parseDouble(right.toString()));
+    // 左辺が数値かつ右辺がクォートで囲まれた数値の場合は、右辺を文字列ではなく数値として解釈して比較する
+    if (left instanceof Number && right instanceof String text && isDouble(text)) {
+      return Double.compare(toDouble(left), Double.parseDouble(text));
     }
+
     return left.toString().compareTo(right.toString());
   }
 
-  private static boolean isQuoted(String value) {
-    return value.length() >= 2 && value.startsWith("'") && value.endsWith("'");
-  }
-
   private static double toDouble(Object value) {
-    if (value instanceof Number number) return number.doubleValue();
+    if (value instanceof Number number) {
+      return number.doubleValue();
+    }
+
     return Double.parseDouble(value.toString());
   }
 
@@ -93,12 +126,5 @@ public class ConditionEvaluator {
     } catch (NumberFormatException e) {
       return false;
     }
-  }
-
-  private static String stripQuote(String value) {
-    if (isQuoted(value)) {
-      return value.substring(1, value.length() - 1);
-    }
-    return value;
   }
 }

@@ -1,18 +1,20 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.DB.Schema;
-import customdb.chapter07.DB.Table;
-import customdb.chapter07.Parser.Statement;
+import customdb.minidbchap7.parser.Statement;
+import customdb.minidbchap7.table.Row;
+import customdb.minidbchap7.table.Schema;
+import customdb.minidbchap7.table.Table;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Iterator;
+import java.util.List;
 
 public class UpdateOperator implements Operator {
   private final Table table;
   private final Schema schema;
   private final Statement.Update statement;
-  private Iterator<Table.Record> iterator;
+  private List<Row> updatedRows;
+  private Iterator<Row> iterator;
 
   public UpdateOperator(Table table, Schema schema, Statement.Update statement) {
     this.table = table;
@@ -22,65 +24,47 @@ public class UpdateOperator implements Operator {
 
   @Override
   public void open() throws IOException {
-    this.iterator = table.scanRecords().iterator();
-  }
-
-  @Override
-  public Row next() throws IOException {
     Schema.Column targetColumn = schema.getColumn(statement.columnName());
     if (targetColumn == null) {
       throw new IllegalArgumentException("Unknown column: " + statement.columnName());
     }
 
-    while (iterator != null && iterator.hasNext()) {
-      Table.Record record = iterator.next();
-      Row row = record.row();
+    Object newValue = ValueParser.parseValue(statement.value(), targetColumn);
 
-      if (ConditionEvaluator.matches(row, statement.whereCondition())) {
-        Object newValue = parseValue(statement.value(), targetColumn);
-        row.put(targetColumn.name(), newValue);
-        table.update(record.recordId(), row);
-        return row;
+    List<Table.Record> matched = new ArrayList<>();
+    for (Table.Record record : table.scanRecords()) {
+      if (ConditionEvaluator.matches(record.row(), statement.whereCondition())) {
+        matched.add(record);
       }
     }
 
+    // UPDATEで複数行の主キーに同じ値を設定する場合、主キーが重複するため書き込み前に拒否する
+    if (targetColumn.primaryKey() && matched.size() > 1) {
+      throw new IllegalArgumentException("Duplicate primary key: " + newValue);
+    }
+
+    updatedRows = new ArrayList<>();
+    for (Table.Record record : matched) {
+      Row updated = new Row();
+      updated.putAll(record.row());
+      updated.put(targetColumn.name(), newValue);
+      table.update(record.recordId(), updated);
+      updatedRows.add(updated);
+    }
+
+    iterator = updatedRows.iterator();
+  }
+
+  @Override
+  public Row next() throws IOException {
+    if (iterator != null && iterator.hasNext()) {
+      return iterator.next();
+    }
     return null;
   }
 
   @Override
   public void close() throws IOException {
-    this.iterator = null;
-  }
-
-  private Object parseValue(String rawValue, Schema.Column column) {
-    String value = stripQuote(rawValue);
-    return switch (column.type()) {
-      case INTEGER -> Integer.parseInt(value);
-      case FLOAT -> Float.parseFloat(value);
-      case DOUBLE -> Double.parseDouble(value);
-      case STRING -> {
-        // 格納は UTF-8 バイト列なので、char 数ではなくバイト長で上限を判定する
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > column.length()) {
-          throw new IllegalArgumentException(
-              "Value byte length exceeds column length. column="
-                  + column.name()
-                  + ", length="
-                  + column.length()
-                  + ", byteLength="
-                  + bytes.length
-                  + ", value="
-                  + value);
-        }
-        yield value;
-      }
-    };
-  }
-
-  private String stripQuote(String value) {
-    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
-      return value.substring(1, value.length() - 1);
-    }
-    return value;
+    iterator = null;
   }
 }

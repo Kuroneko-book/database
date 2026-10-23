@@ -1,11 +1,10 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.DB.Schema;
-import customdb.chapter07.DB.Table;
-import customdb.chapter07.Parser.Statement;
+import customdb.minidbchap7.parser.Statement;
+import customdb.minidbchap7.table.Row;
+import customdb.minidbchap7.table.Schema;
+import customdb.minidbchap7.table.Table;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.util.List;
 
 public class InsertOperator implements Operator {
@@ -39,84 +38,66 @@ public class InsertOperator implements Operator {
 
   private Row buildRow(Schema schema, Statement.Insert statement) {
     Row row = new Row();
+
     for (Schema.Column column : schema.getColumns()) {
-      row.put(column.name(), defaultValue(column));
+      row.put(column.name(), ValueParser.defaultValue(column));
     }
 
     List<String> columnNames = statement.columnNames();
     List<String> values = statement.values();
 
-    if (columnNames == null || columnNames.isEmpty()) {
+    Schema.Column primaryKey = schema.primaryKeyColumn();
+    if (!columnNames.isEmpty()) {
+      // 列を指定するINSERTでは主キーが必須
+      boolean supplied = false;
+      for (String columnName : columnNames) {
+        if (columnName.equalsIgnoreCase(primaryKey.name())) {
+          supplied = true;
+          break;
+        }
+      }
+      if (!supplied) {
+        throw new IllegalArgumentException(
+            "Primary key column must be specified: " + primaryKey.name());
+      }
+    }
+
+    if (columnNames.isEmpty()) {
       if (values.size() != schema.getColumns().size()) {
         throw new IllegalArgumentException(
-            "Column count does not match value count="
+            "Column count does not match value count. columns="
                 + schema.getColumns().size()
                 + ", values="
                 + values.size());
       }
+
       for (int i = 0; i < schema.getColumns().size(); i++) {
         Schema.Column column = schema.getColumns().get(i);
-        row.put(column.name(), parseValue(values.get(i), column));
+        row.put(column.name(), ValueParser.parseValue(values.get(i), column));
       }
+
       return row;
     }
 
     if (columnNames.size() != values.size()) {
       throw new IllegalArgumentException(
-          "Column count does not match value count="
+          "Column count does not match value count. columns="
               + columnNames.size()
               + ", values="
               + values.size());
     }
+
     for (int i = 0; i < columnNames.size(); i++) {
       String columnName = columnNames.get(i);
       Schema.Column column = schema.getColumn(columnName);
+
       if (column == null) {
         throw new IllegalArgumentException("Unknown column: " + columnName);
       }
-      row.put(column.name(), parseValue(values.get(i), column));
+
+      row.put(column.name(), ValueParser.parseValue(values.get(i), column));
     }
+
     return row;
-  }
-
-  private Object parseValue(String rawValue, Schema.Column column) {
-    String value = stripQuote(rawValue);
-    return switch (column.type()) {
-      case INTEGER -> Integer.parseInt(value);
-      case FLOAT -> Float.parseFloat(value);
-      case DOUBLE -> Double.parseDouble(value);
-      case STRING -> {
-        // 格納は UTF-8 バイト列なので、char 数ではなくバイト長で上限を判定する
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
-        if (bytes.length > column.length()) {
-          throw new IllegalArgumentException(
-              "Value byte length exceeds column length. column="
-                  + column.name()
-                  + ", length="
-                  + column.length()
-                  + ", byteLength="
-                  + bytes.length
-                  + ", value="
-                  + value);
-        }
-        yield value;
-      }
-    };
-  }
-
-  private Object defaultValue(Schema.Column column) {
-    return switch (column.type()) {
-      case INTEGER -> 0;
-      case FLOAT -> 0.0f;
-      case DOUBLE -> 0.0d;
-      case STRING -> "";
-    };
-  }
-
-  private String stripQuote(String value) {
-    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
-      return value.substring(1, value.length() - 1);
-    }
-    return value;
   }
 }

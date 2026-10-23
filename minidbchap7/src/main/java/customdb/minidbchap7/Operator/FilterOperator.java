@@ -1,7 +1,7 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.Parser.Statement.Condition;
+import customdb.minidbchap7.parser.Statement.Condition;
+import customdb.minidbchap7.table.Row;
 import java.io.IOException;
 
 public class FilterOperator implements Operator {

@@ -1,12 +1,13 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.DB.Schema;
-import customdb.chapter07.DB.Table;
-import customdb.chapter07.Parser.Statement.Condition;
+import customdb.minidbchap7.parser.Statement.Condition;
+import customdb.minidbchap7.table.Row;
+import customdb.minidbchap7.table.Schema;
+import customdb.minidbchap7.table.Table;
 import java.io.IOException;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 
 public class IndexScanOperator implements Operator {
   private final Table table;
@@ -25,15 +26,20 @@ public class IndexScanOperator implements Operator {
   @Override
   public void open() throws IOException {
     Schema.Column column = schema.getColumn(condition.left());
-    Object value = condition.right();
-
-    String columnName = column != null ? column.name() : condition.left();
-
-    if (column != null) {
-      value = parseValue(condition.right(), column);
+    if (column == null) {
+      throw new IllegalArgumentException("Unknown column: " + condition.left());
     }
 
-    List<Row> rows = table.searchByIndex(columnName, value);
+    String columnName = column.name();
+    Object value = ValueParser.parseValue(condition.right(), column);
+
+    List<Row> rows;
+    if (condition.operator().equals("=")) {
+      rows = table.searchByIndex(columnName, value);
+    } else {
+      // 範囲索引はint主キーのみが対象（ここでvaluwはintであることが保証）
+      rows = table.searchRangeByIndex(columnName, (Integer) value, condition.operator());
+    }
     this.iterator = rows.iterator();
   }
 
@@ -51,31 +57,20 @@ public class IndexScanOperator implements Operator {
     this.iterator = null;
   }
 
+  // 既存の行にrawカラムと表名付き列（id と users.id）の両方を詰めて返す（結合時に列名の衝突を避ける）
   private Row qualifyRow(String tableName, Schema schema, Row row) {
     Row qualified = new Row();
     for (Schema.Column column : schema.getColumns()) {
       String columnName = column.name();
       Object value = row.get(columnName);
       qualified.put(columnName, value);
-      qualified.put(tableName + "." + columnName, value);
+      qualified.put(normalize(tableName) + "." + columnName, value);
     }
     return qualified;
   }
 
-  private Object parseValue(String rawValue, Schema.Column column) {
-    String value = stripQuote(rawValue);
-    return switch (column.type()) {
-      case INTEGER -> Integer.parseInt(value);
-      case FLOAT -> Float.parseFloat(value);
-      case DOUBLE -> Double.parseDouble(value);
-      case STRING -> value;
-    };
-  }
-
-  private String stripQuote(String value) {
-    if (value.length() >= 2 && value.startsWith("'") && value.endsWith("'")) {
-      return value.substring(1, value.length() - 1);
-    }
-    return value;
+  // 表名・列名は大文字小文字を区別しない
+  private String normalize(String name) {
+    return name.toLowerCase(Locale.ROOT);
   }
 }

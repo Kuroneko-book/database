@@ -1,8 +1,8 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
-import customdb.chapter07.DB.Table;
-import customdb.chapter07.Parser.Statement;
+import customdb.minidbchap7.parser.Statement;
+import customdb.minidbchap7.table.Row;
+import customdb.minidbchap7.table.Table;
 import java.io.IOException;
 import java.util.Iterator;
 

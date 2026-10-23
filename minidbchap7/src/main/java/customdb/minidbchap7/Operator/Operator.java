@@ -1,6 +1,6 @@
-package customdb.chapter07.Operator;
+package customdb.minidbchap7.operator;
 
-import customdb.chapter07.DB.Row;
+import customdb.minidbchap7.table.Row;
 import java.io.IOException;
 
 public interface Operator {
