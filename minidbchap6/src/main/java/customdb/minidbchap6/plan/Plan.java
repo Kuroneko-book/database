@@ -1,4 +1,4 @@
-package customdb.minidbchap6.Plan;
+package customdb.minidbchap6.plan;
 
 import customdb.minidbchap6.executor.ExecutionContext;
 import customdb.minidbchap6.parser.Statement;

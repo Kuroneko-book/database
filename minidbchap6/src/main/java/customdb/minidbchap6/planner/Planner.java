@@ -1,9 +1,9 @@
-package customdb.minidbchap6.Planner;
+package customdb.minidbchap6.planner;
 
-import customdb.minidbchap6.Plan.IndexScanPlan;
-import customdb.minidbchap6.Plan.Plan;
-import customdb.minidbchap6.Plan.SeqScanPlan;
 import customdb.minidbchap6.parser.Statement;
+import customdb.minidbchap6.plan.IndexScanPlan;
+import customdb.minidbchap6.plan.Plan;
+import customdb.minidbchap6.plan.SeqScanPlan;
 import customdb.minidbchap6.table.Schema;
 import java.nio.charset.StandardCharsets;
 import java.util.Set;

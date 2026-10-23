@@ -1,8 +1,8 @@
 package customdb.minidbchap6.executor;
 
-import customdb.minidbchap6.Plan.Plan;
-import customdb.minidbchap6.Planner.Planner;
 import customdb.minidbchap6.parser.Statement;
+import customdb.minidbchap6.plan.Plan;
+import customdb.minidbchap6.planner.Planner;
 import customdb.minidbchap6.table.Catalog;
 import customdb.minidbchap6.table.Row;
 import customdb.minidbchap6.table.Schema;
