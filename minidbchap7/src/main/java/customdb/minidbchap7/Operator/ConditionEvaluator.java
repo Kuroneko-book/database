@@ -91,6 +91,12 @@ public class ConditionEvaluator {
   }
 
   private static int compare(Object left, Object right) {
+    if (left instanceof Float number && right instanceof Number other) {
+      return Float.compare(number, other.floatValue());
+    }
+    if (left instanceof Float number && right instanceof String text && isDouble(text)) {
+      return Float.compare(number, Float.parseFloat(text));
+    }
     if (left instanceof Number && right instanceof Number) {
       return Double.compare(toDouble(left), toDouble(right));
     }

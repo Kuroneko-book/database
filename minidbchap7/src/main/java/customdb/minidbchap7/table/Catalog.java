@@ -166,7 +166,9 @@ public class Catalog {
               + ":"
               + column.length()
               + ":"
-              + (column.primaryKey() ? "1" : "0"));
+              + (column.primaryKey() ? "1" : "0")
+              + ":"
+              + (column.indexed() ? "1" : "0"));
     }
 
     return schema.getTableName() + "|" + String.join(",", columnTexts);
@@ -188,9 +190,9 @@ public class Catalog {
       String[] columnTexts = columnsPart.split(",");
 
       for (String columnText : columnTexts) {
-        String[] columnParts = columnText.split(":", 4);
+        String[] columnParts = columnText.split(":", 5);
 
-        if (columnParts.length != 4) {
+        if (columnParts.length != 4 && columnParts.length != 5) {
           throw new IllegalArgumentException("Invalid column definition: " + columnText);
         }
 
@@ -205,7 +207,15 @@ public class Catalog {
           throw new IllegalArgumentException("Invalid primary key flag: " + columnText);
         }
 
-        columns.add(new Schema.Column(columnName, type, length, columnParts[3].equals("1")));
+        boolean indexed = false;
+        if (columnParts.length == 5) {
+          if (!columnParts[4].equals("0") && !columnParts[4].equals("1")) {
+            throw new IllegalArgumentException("Invalid index flag: " + columnText);
+          }
+          indexed = columnParts[4].equals("1");
+        }
+        columns.add(
+            new Schema.Column(columnName, type, length, columnParts[3].equals("1"), indexed));
       }
     }
 

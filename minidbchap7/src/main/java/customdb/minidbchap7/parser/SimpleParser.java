@@ -227,13 +227,28 @@ public class SimpleParser {
       }
 
       boolean primaryKey = false;
-      if (index < tokens.size() && equalsIgnoreCase(tokens.get(index), "primary")) {
-        expect(tokens, index + 1, "key");
-        primaryKey = true;
-        index += 2;
+      boolean indexed = false;
+      // PRIMARY KEY と INDEX は両方指定可能でどちらを先に書いてもよい
+      while (index < tokens.size()) {
+        if (equalsIgnoreCase(tokens.get(index), "primary")) {
+          if (primaryKey) {
+            throw new IllegalArgumentException("Duplicate PRIMARY KEY: " + columnName);
+          }
+          expect(tokens, index + 1, "key");
+          primaryKey = true;
+          index += 2;
+        } else if (equalsIgnoreCase(tokens.get(index), "index")) {
+          if (indexed) {
+            throw new IllegalArgumentException("Duplicate INDEX: " + columnName);
+          }
+          indexed = true;
+          index++;
+        } else {
+          break;
+        }
       }
 
-      columns.add(new Schema.Column(columnName, type, length, primaryKey));
+      columns.add(new Schema.Column(columnName, type, length, primaryKey, indexed));
 
       if (index < tokens.size() && tokens.get(index).equals(",")) {
         index++;

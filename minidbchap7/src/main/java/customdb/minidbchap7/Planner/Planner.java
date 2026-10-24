@@ -9,6 +9,7 @@ import customdb.minidbchap7.operator.Operator;
 import customdb.minidbchap7.operator.ProjectOperator;
 import customdb.minidbchap7.operator.SeqScanOperator;
 import customdb.minidbchap7.operator.UpdateOperator;
+import customdb.minidbchap7.operator.ValueParser;
 import customdb.minidbchap7.parser.Statement;
 import customdb.minidbchap7.table.Catalog;
 import customdb.minidbchap7.table.Schema;
@@ -125,6 +126,10 @@ public class Planner {
         && isNumericLiteral(condition.right())) {
       return false;
     }
+    if (column.type() != Schema.DataType.INTEGER
+        && !isCompatibleLiteral(column, condition.right())) {
+      return false;
+    }
     return condition.operator().equals("=")
         || (column.type() == Schema.DataType.INTEGER
             && Set.of(">", ">=", "<", "<=").contains(condition.operator()));
@@ -173,6 +178,16 @@ public class Planner {
       Double.parseDouble(value);
       return true;
     } catch (NumberFormatException e) {
+      return false;
+    }
+  }
+
+  // 右辺リテラルを列の型へ変換できるかの判定　変換できない場合は SeqScan となる
+  private boolean isCompatibleLiteral(Schema.Column column, String value) {
+    try {
+      ValueParser.parseValue(value, column);
+      return true;
+    } catch (RuntimeException e) {
       return false;
     }
   }
