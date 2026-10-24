@@ -24,4 +24,4 @@ toc: true
 # 本文書体は、コンテナのデフォルトである原の味フォントで出力される）
 # 本文の文字サイズを既定の10ptから12ptへ上げる
 # 余白と適度のバランスを取る（A4判・12pt・行長42字・39行）
-texdocumentclass: ["review-jsbook", "media=ebook,paper=a4,fontsize=12pt,line_length=42zw,number_of_lines=39"]
+texdocumentclass: ["review-jsbook", "media=ebook,paper=a4,fontsize=12pt,line_length=42zw,number_of_lines=39,serial_pagination=true"]
