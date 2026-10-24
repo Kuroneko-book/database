@@ -351,6 +351,10 @@ public record TupleId(int pageIndex, int slotIndex) {
 
 最後に、TupleIdから実際のレコードを取り出すまでの流れを、これまでに作った部品の名前でたどっておきます。例として「ページ番号0・スロット番号1」を指すTupleIdを考えます。
 
+//embed[|latex|]{
+\Needspace{22\Cvs}
+//}
+
 //emlist[TupleIdからレコードを取り出すまでの流れ]{
 TupleId (pageNo = 0, slotNo = 1)
         |

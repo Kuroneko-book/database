@@ -363,7 +363,7 @@ public void update(String key, String value) {
 //noindent
 insertと違い、updateは既存のデータを上書きする意図の操作なので、単純な @<code>{put()} を使用しています。
 
-==== delete 
+==== delete
 
 不要になったデータは、@<b>{delete}コマンドで削除します。
 
@@ -416,7 +416,7 @@ Mapを使うと、この表のような対応関係をそのままプログラ�
 本書では、このキーを「レコードのID」、値を「レコードの内容」として扱います。
 プログラムでは、データベース本体を次のように宣言しています。
 
-//emlist[MiniDBクラスの 필드定義][java]{
+//emlist[MiniDBクラスのフィールド定義][java]{
 public class MiniDB {
   // データベース本体（キーは数値型のID、値は文字列）
   private Map<Integer, String> db;
