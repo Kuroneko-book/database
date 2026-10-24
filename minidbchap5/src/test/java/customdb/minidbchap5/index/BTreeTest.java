@@ -1,10 +1,9 @@
-package customdb.minidbchap5;
+package customdb.minidbchap5.index;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import customdb.minidbchap5.index.BTree;
 import customdb.minidbchap5.storage.TupleId;
 import java.util.ArrayList;
 import java.util.List;
