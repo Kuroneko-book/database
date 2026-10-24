@@ -9,3 +9,6 @@ bin/
 
 # Ignore database storage file
 data
+
+# Re:VIEW build output
+articles/*.pdf
